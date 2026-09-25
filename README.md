@@ -3,10 +3,16 @@ A simulation of a smart store using real iot devices with a functional full stac
 
 Frontend:
 - HTML
-- CSS
 
 Backend:
 - Python (Flask)
 
 Database:
 - SQLite
+
+Templating Engine:
+-Jinja
+
+Libraries used:
+-lgpio
+-SQLAlchemy
