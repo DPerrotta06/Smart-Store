@@ -1,0 +1,22 @@
+<html>
+    <head>
+        <title>
+            Add Customer
+        </title>
+    </head>
+    <body>
+
+        {% if message %}
+            <p>{{ message }}</p>
+        {% endif %}
+
+        <form action="/add_customer" method="POST">
+            <input type="text" name="first_name" placeholder="First Name">
+            <input type="text" name="last_name" placeholder="Last Name">
+            <input type="text" name="tel_number" placeholder="Phone Number">
+            <input type="email" name="email" placeholder="Email">
+            <input type="text" name="customer_address" placeholder="Address">
+            <button type="submit">Add Customer</button>
+        </form>
+    </body>
+</html>
