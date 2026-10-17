@@ -1,5 +1,6 @@
 from Database.db import db
 from datetime import date
+import uuid
 
 class Customer(db.Model):
     __tablename__ = "Customer"
@@ -10,7 +11,8 @@ class Customer(db.Model):
     tel_number= db.Column(db.String, nullable=False)
     email= db.Column(db.String, nullable=False)
     customer_address= db.Column(db.String, nullable=False)
-    member_since = db.Column(db.String, nullable=False, default=lambda: str(date.today()))
+    customer_uuid=db.Column(db.String, nullable=False, unique=True)
+    
 
 
     def save(self):
