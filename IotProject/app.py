@@ -1,6 +1,6 @@
 from flask import Flask
 from Database.db import db
-from Controller.controller import customer_bp
+from Controller.customerController import customer_bp
 import os
 
 app= Flask(__name__)

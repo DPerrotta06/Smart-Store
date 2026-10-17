@@ -1,6 +1,6 @@
 from flask import Blueprint, request, redirect, render_template
-from Model.model import Customer
-from Controller.hardware import success,failure
+from Model.customerModel import Customer
+
 
 customer_bp=Blueprint('customer_bp',__name__, template_folder='../View')
 
@@ -26,10 +26,8 @@ def addingcustomer():
             customer_address=customer_address
         )
         new_customer.save()
-        success()
         message=f"added customer"
     except Exception as e:
-        failure()
         message=f"Cant add customer: {e}"
 
     return render_template('view.html', message=message)
