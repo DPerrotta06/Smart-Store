@@ -3,7 +3,7 @@ from Database.db import db
 from Controller.customerController import customer_bp
 import os
 
-app= Flask(__name__)
+app= Flask(__name__)  # python3 app.py<-----------------------------------
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'Database', 'smart_store.db')
 
