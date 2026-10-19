@@ -1,6 +1,7 @@
 from flask import Flask
 from Database.db import db
 from Controller.customerController import customer_bp
+from Controller.fanController import fan_bp
 import os
 
 app= Flask(__name__)  # python3 app.py<-----------------------------------
@@ -9,6 +10,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'Da
 
 db.init_app(app)
 app.register_blueprint(customer_bp)
+app.register_blueprint(fan_bp)
 
 if __name__ == '__main__':
     app.run(debug=True, use_reloader=False)
