@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Refrigerator Sensor Dashboard</title>
+    <!-- Raphael & JustGage CDN for simple gauges -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/raphael/2.3.0/raphael.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/justgage/1.6.1/justgage.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f4f9; text-align: center; margin: 20px; }
+        .dashboard { display: flex; justify-content: center; gap: 40px; flex-wrap: wrap; }
+        .fridge-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); width: 420px; }
+        .gauges { display: flex; justify-content: space-around; }
+        .gauge-box { width: 180px; height: 150px; }
+        .threshold-box { margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd; }
+        input[type="number"] { width: 70px; padding: 5px; font-size: 14px; }
+        button { padding: 6px 12px; cursor: pointer; }
+        .status { font-size: 12px; color: green; height: 16px; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+    <h2>Store Refrigerator Dashboard</h2>
+
+    <div class="dashboard">
+        <!-- Refrigerator 1 -->
+        <div class="fridge-card">
+            <h3>Refrigerator 1 (Frig1)</h3>
+            <div class="gauges">
+                <div id="g_temp1" class="gauge-box"></div>
+                <div id="g_hum1" class="gauge-box"></div>
+            </div>
+            <div class="threshold-box">
+                <label>Temp Threshold (°C): </label>
+                <input type="number" step="0.5" id="thresh1" value="{{ thresholds.Frig1 }}">
+                <button onclick="saveThresholds()">Save</button>
+            </div>
+        </div>
+
+        <!-- Refrigerator 2 -->
+        <div class="fridge-card">
+            <h3>Refrigerator 2 (Frig2)</h3>
+            <div class="gauges">
+                <div id="g_temp2" class="gauge-box"></div>
+                <div id="g_hum2" class="gauge-box"></div>
+            </div>
+            <div class="threshold-box">
+                <label>Temp Threshold (°C): </label>
+                <input type="number" step="0.5" id="thresh2" value="{{ thresholds.Frig2 }}">
+                <button onclick="saveThresholds()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="saveStatus" class="status"></div>
+
+    <script>
+        // Initialize the 4 gauges
+        const temp1Gauge = new JustGage({ id: "g_temp1", value: 0, min: -10, max: 50, title: "Temperature", label: "°C", decimals: 1 });
+        const hum1Gauge  = new JustGage({ id: "g_hum1",  value: 0, min: 0,   max: 100, title: "Humidity",    label: "%",  decimals: 1 });
+        const temp2Gauge = new JustGage({ id: "g_temp2", value: 0, min: -10, max: 50, title: "Temperature", label: "°C", decimals: 1 });
+        const hum2Gauge  = new JustGage({ id: "g_hum2",  value: 0, min: 0,   max: 100, title: "Humidity",    label: "%",  decimals: 1 });
+
+        // Poll Flask every 2 seconds to update gauges from ESP32 MQTT data
+        setInterval(() => {
+            fetch('/api/sensors')
+                .then(res => res.json())
+                .then(data => {
+                    temp1Gauge.refresh(data.Frig1.temperature);
+                    hum1Gauge.refresh(data.Frig1.humidity);
+                    temp2Gauge.refresh(data.Frig2.temperature);
+                    hum2Gauge.refresh(data.Frig2.humidity);
+                });
+        }, 2000);
+
+        // Save updated thresholds to thresholds.json via Flask
+        function saveThresholds() {
+            const t1 = document.getElementById('thresh1').value;
+            const t2 = document.getElementById('thresh2').value;
+
+            fetch('/api/thresholds', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ Frig1: t1, Frig2: t2 })
+            })
+            .then(res => res.json())
+            .then(() => {
+                const status = document.getElementById('saveStatus');
+                status.innerText = "Thresholds saved to thresholds.json!";
+                setTimeout(() => status.innerText = "", 2500);
+            });
+        }
+    </script>
+</body>
+</html>
