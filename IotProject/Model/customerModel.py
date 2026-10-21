@@ -1,5 +1,9 @@
 from Database.db import db
-from sqlalchemy import func
+from sqlalchemy import func,select
+from sqlalchemy.exc import IntegrityError
+from GeneralFunction.generalFunction import normalizeEmail
+
+
 
 class Customer(db.Model):
     __tablename__ = "Customer"
@@ -14,9 +18,21 @@ class Customer(db.Model):
     
 
 
-    def save(self): #should be outside of class function that checks if user exists based on email
-        db.session.add(self)
-        db.session.commit()
+def selectCustomerByEmail(user_email: str):
+        stmt=select(Customer).filter_by(email=user_email)
+        userCheck=db.session.execute(stmt).scalar_one_or_none()
+        if userCheck is None:
+                    return False
+        return True
+
+def saveCustomer(customer: Customer):
+        try:
+            db.session.add(customer)
+            db.session.commit()
+            return True
+        except IntegrityError:
+            db.session.rollback()
+            return False
 
 
 
