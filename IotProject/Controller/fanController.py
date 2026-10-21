@@ -8,7 +8,7 @@ fan_bp = Blueprint('fan_bp', __name__)
 atexit.register(fan.cleanup)
 
 
-@fan_bp.route('/fan', methods=['GET'])
+@fan_bp.route('/fan/status', methods=['GET'])
 def fan_status():
     # The dashboard can poll this to update the ON/OFF icon
     return jsonify({"fan": fan.status()})

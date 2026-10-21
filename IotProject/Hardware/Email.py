@@ -10,12 +10,13 @@ SENDER_EMAIL = "" #REMOVE AFTER
 SENDER_PASSWORD = "" #FILL IN LATER
 RECEIVER_EMAIL = ""
 
-def send_email():
+
+def send_email(fridge, temp):
     payload = EmailMessage()
     payload["Subject"] = "Tempearture Inquiry"
     payload["FROM"] = SENDER_EMAIL
     payload["TO"] = RECEIVER_EMAIL
-    payload.set_content("") #add 
+    payload.set_content(f"The temperature of {fridge} is {temp}°C.\nWould you like to turn on the fan? (YES or NO)") 
     with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
         server.starttls() #Encryption channel for emails
         server.login(SENDER_EMAIL, SENDER_PASSWORD)
@@ -51,6 +52,12 @@ def read_latest_email():
     print("-------------------------")
     mail.logout()
 
+def is_yes():
+    print()
+
+
+def wait_for_reply():
+    print()
 
 try:
     send_email()
