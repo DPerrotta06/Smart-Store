@@ -1,10 +1,294 @@
-<html>
-    <head>
-        <title>
-            Temperature
-        </title>
-    </head>
-    <body>
-        <h1>Hello</h1>
-    </body>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Store Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('customer_bp.static', filename='temperature.css') }}">
+</head>
+<body>
+    <main class="page">
+        <header class="top">
+            <h1>Store dashboard</h1>
+
+            <div class="top-right">
+                <button type="button" id="notify-btn" class="ghost" hidden>Enable notifications</button>
+
+                <div class="fan" id="fan">
+                    <svg class="fan-icon" viewBox="0 0 48 48" aria-hidden="true">
+                        <g fill="currentColor">
+                            <path d="M24 24 C17 17 18 5 25 5 C31 5 31 17 24 24 Z"/>
+                            <path transform="rotate(120 24 24)" d="M24 24 C17 17 18 5 25 5 C31 5 31 17 24 24 Z"/>
+                            <path transform="rotate(240 24 24)" d="M24 24 C17 17 18 5 25 5 C31 5 31 17 24 24 Z"/>
+                        </g>
+                        <circle cx="24" cy="24" r="3.5" class="hub"/>
+                    </svg>
+                    <div class="fan-text">
+                        <span class="fan-title">Fan</span>
+                        <span class="fan-status" id="fan-status">OFF</span>
+                    </div>
+                    <button type="button" id="fan-toggle">Turn on</button>
+                </div>
+            </div>
+        </header>
+
+        <section id="banner" class="banner" role="alert" hidden></section>
+
+        <div class="fridges" id="fridges"></div>
+    </main>
+
+    <script>
+        const DATA_URL = "{{ url_for('customer_bp.get_sensors') }}";
+        const THRESHOLD_URL = "{{ url_for('customer_bp.update_thresholds') }}";
+        const FAN_STATUS_URL = "{{ url_for('fan_bp.fan_status') }}";
+        const FAN_ON_URL = "{{ url_for('fan_bp.fan_on') }}";
+        const FAN_OFF_URL = "{{ url_for('fan_bp.fan_off') }}";
+        const limits = {{ thresholds | tojson }}; //ignore error
+
+        const FRIDGES = [
+            { topic: "Frig1", name: "Fridge 1" },
+            { topic: "Frig2", name: "Fridge 2" }
+        ];
+        const TEMP_MAX = 50;
+        const HUM_MAX = 100;
+        const ARC_LENGTH = Math.PI * 80;
+
+        const wasAlert = {};
+
+        const FRIDGE_ICON = `
+            <svg class="fridge-icon" viewBox="0 0 24 28" aria-hidden="true">
+                <rect x="3" y="1" width="18" height="26" rx="3" fill="none" stroke="currentColor" stroke-width="2"/>
+                <line x1="3" y1="11" x2="21" y2="11" stroke="currentColor" stroke-width="2"/>
+                <line x1="7.5" y1="5" x2="7.5" y2="8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <line x1="7.5" y1="15" x2="7.5" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>`;
+
+        const DROP_PATH = "M100 26 C100 26 88 42 88 52 A12 12 0 0 0 112 52 C112 42 100 26 100 26 Z";
+
+        function icon(id, kind) {
+            if (kind === "temp") {
+                return `
+                        <path class="th-body" d="M96.5 29.5 A3.5 3.5 0 0 1 103.5 29.5 V54.81 A8 8 0 1 1 96.5 54.81 Z"/>
+                        <g class="merc">
+                            <circle cx="100" cy="62" r="5"/>
+                            <rect id="${id}-icon" x="98" y="62" width="4" height="0"/>
+                        </g>`;
+            }
+            return `
+                        <clipPath id="${id}-clip"><rect id="${id}-icon" x="80" y="64" width="40" height="0"/></clipPath>
+                        <path class="drop-body" d="${DROP_PATH}"/>
+                        <path class="drop-fill" clip-path="url(#${id}-clip)" d="${DROP_PATH}"/>`;
+        }
+
+        function setIcon(id, fraction) {
+            const rect = document.getElementById(id + "-icon");
+            const isTemp = id.endsWith("-temp");
+            const full = isTemp ? 31 : 38;
+            const bottom = isTemp ? 62 : 64;
+            rect.setAttribute("y", bottom - full * fraction);
+            rect.setAttribute("height", full * fraction);
+        }
+
+        function gauge(id, label, kind, max) {
+            return `
+                <div class="gauge ${kind}">
+                    <svg viewBox="0 0 200 116" role="img" aria-label="${label}">
+                        <path class="track" d="M 20 100 A 80 80 0 0 1 180 100"/>
+                        <path class="fill" id="${id}-fill" d="M 20 100 A 80 80 0 0 1 180 100"
+                              stroke-dasharray="${ARC_LENGTH}" stroke-dashoffset="${ARC_LENGTH}"/>
+                        <line class="limit" id="${id}-limit" visibility="hidden"/>
+                        ${icon(id, kind)}
+                        <text class="value" id="${id}-value" x="100" y="92">--</text>
+                        <text class="end" x="20" y="114">0</text>
+                        <text class="end" x="180" y="114">${max}</text>
+                    </svg>
+                    <p class="gauge-label">${label}</p>
+                </div>`;
+        }
+
+        function renderCards() {
+            document.getElementById("fridges").innerHTML = FRIDGES.map(f => `
+                <section class="card" id="card-${f.topic}">
+                    <header class="card-head">
+                        <div class="title">${FRIDGE_ICON}<h2>${f.name}</h2></div>
+                        <span class="status waiting" id="status-${f.topic}">Waiting for data</span>
+                    </header>
+
+                    <div class="gauges">
+                        ${gauge(f.topic + "-temp", "Temperature (°C)", "temp", TEMP_MAX)}
+                        ${gauge(f.topic + "-hum", "Humidity (%)", "humidity", HUM_MAX)}
+                    </div>
+
+                    <form class="threshold" data-topic="${f.topic}">
+                        <label for="limit-${f.topic}">Alert above</label>
+                        <input type="number" id="limit-${f.topic}" min="0" max="50" step="0.5"
+                               value="${limits[f.topic]}" required>
+                        <span class="unit">°C</span>
+                        <button type="submit">Save</button>
+                        <span class="note" aria-live="polite"></span>
+                    </form>
+                </section>`).join("");
+
+            document.querySelectorAll(".threshold").forEach(form => {
+                form.addEventListener("submit", saveLimit);
+            });
+        }
+
+        function setGauge(id, value, max) {
+            const fill = document.getElementById(id + "-fill");
+            const text = document.getElementById(id + "-value");
+            const gaugeBox = fill.closest(".gauge");
+            if (value === null) {
+                fill.style.strokeDashoffset = ARC_LENGTH;
+                text.textContent = "--";
+                gaugeBox.classList.add("empty");
+                setIcon(id, 0);
+                return;
+            }
+            const fraction = Math.min(Math.max(value / max, 0), 1);
+            fill.style.strokeDashoffset = ARC_LENGTH * (1 - fraction);
+            text.textContent = value.toFixed(1);
+            gaugeBox.classList.remove("empty");
+            setIcon(id, fraction);
+        }
+
+        function setLimitMark(id, limit, max) {
+            const line = document.getElementById(id + "-limit");
+            const angle = Math.PI * (1 - limit / max);
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+            line.setAttribute("x1", 100 + 68 * cos);
+            line.setAttribute("y1", 100 - 68 * sin);
+            line.setAttribute("x2", 100 + 92 * cos);
+            line.setAttribute("y2", 100 - 92 * sin);
+            line.setAttribute("visibility", "visible");
+        }
+
+        function systemNotification(name, temp, limit) {
+            if (!("Notification" in window) || Notification.permission !== "granted") return;
+            new Notification(name + " temperature alert", {
+                body: "Currently " + temp.toFixed(1) + " °C, limit is " + limit.toFixed(1) + " °C."
+            });
+        }
+
+        async function saveLimit(event) {
+            event.preventDefault();
+            const form = event.currentTarget;
+            const topic = form.dataset.topic;
+            const note = form.querySelector(".note");
+
+            try {
+                const response = await fetch(THRESHOLD_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ [topic]: form.querySelector("input").value })
+                });
+                const body = await response.json();
+                if (response.ok) {
+                    Object.assign(limits, body.thresholds);
+                    note.textContent = "Saved";
+                } else {
+                    note.textContent = body.error || "Could not save";
+                }
+            } catch (error) {
+                note.textContent = "Could not save";
+            }
+            setTimeout(() => { note.textContent = ""; }, 3000);
+            refresh();
+        }
+
+        async function refresh() {
+            let data;
+            try {
+                const response = await fetch(DATA_URL);
+                data = await response.json();
+            } catch (error) {
+                console.error("Could not load data:", error);
+                return;
+            }
+
+            const active = [];
+
+            for (const f of FRIDGES) {
+                const reading = data[f.topic];
+                const limit = limits[f.topic];
+                const temp = reading.temperature;
+                const isAlert = temp !== null && temp > limit;
+
+                setGauge(f.topic + "-temp", temp, TEMP_MAX);
+                setGauge(f.topic + "-hum", reading.humidity, HUM_MAX);
+                setLimitMark(f.topic + "-temp", limit, TEMP_MAX);
+
+                const card = document.getElementById("card-" + f.topic);
+                card.classList.toggle("live", temp !== null);
+                card.classList.toggle("alert", isAlert);
+
+                const status = document.getElementById("status-" + f.topic);
+                if (temp === null) {
+                    status.textContent = "Waiting for data";
+                    status.className = "status waiting";
+                } else if (isAlert) {
+                    status.textContent = "Above limit";
+                    status.className = "status bad";
+                } else {
+                    status.textContent = "Normal";
+                    status.className = "status good";
+                }
+
+                if (isAlert) active.push({ name: f.name, temp: temp, limit: limit });
+                if (isAlert && !wasAlert[f.topic]) systemNotification(f.name, temp, limit);
+                wasAlert[f.topic] = isAlert;
+            }
+
+            const banner = document.getElementById("banner");
+            banner.hidden = active.length === 0;
+            banner.innerHTML = active.map(a =>
+                `<p><strong>${a.name}</strong> is at ${a.temp.toFixed(1)} °C, above its limit of ${a.limit.toFixed(1)} °C.</p>`
+            ).join("");
+        }
+
+        let fanOn = false;
+
+        function showFan(on) {
+            fanOn = on;
+            document.getElementById("fan").classList.toggle("on", on);
+            document.getElementById("fan-status").textContent = on ? "ON" : "OFF";
+            document.getElementById("fan-toggle").textContent = on ? "Turn off" : "Turn on";
+        }
+
+        async function refreshFan() {
+            try {
+                const response = await fetch(FAN_STATUS_URL);
+                const data = await response.json();
+                showFan(data.fan === "ON");
+            } catch (error) {
+                console.error("Could not load fan status:", error);
+            }
+        }
+
+        document.getElementById("fan-toggle").addEventListener("click", async () => {
+            try {
+                const response = await fetch(fanOn ? FAN_OFF_URL : FAN_ON_URL, { method: "POST" });
+                const data = await response.json();
+                showFan(data.fan === "ON");
+            } catch (error) {
+                console.error("Could not change the fan:", error);
+            }
+        });
+
+        const notifyButton = document.getElementById("notify-btn");
+        if ("Notification" in window && window.isSecureContext && Notification.permission === "default") {
+            notifyButton.hidden = false;
+            notifyButton.addEventListener("click", async () => {
+                await Notification.requestPermission();
+                notifyButton.hidden = true;
+            });
+        }
+
+        renderCards();
+        refresh();
+        refreshFan();
+        setInterval(() => { refresh(); refreshFan(); }, 2000);
+    </script>
+</body>
 </html>

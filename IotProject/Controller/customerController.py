@@ -1,8 +1,9 @@
-from flask import Blueprint, request, redirect, render_template
+from flask import Blueprint, request, redirect, render_template, jsonify
 from Model.customerModel import Customer,saveCustomer,selectCustomerByEmail
 from GeneralFunction.generalFunction import normalizeEmail
 import uuid
 import re
+import mosquitto
 
 
 customer_bp=Blueprint('customer_bp',__name__, template_folder='../View/html',static_folder='../View/css')
@@ -12,10 +13,6 @@ customer_bp=Blueprint('customer_bp',__name__, template_folder='../View/html',sta
 def showingform():
     return render_template('signup.html')
 
-
-@customer_bp.route('/temperature',methods=['GET'])
-def temperaturePage():
-    return render_template('temperature.html')
 
 
 @customer_bp.route('/add_customer',methods=['POST'])
@@ -66,3 +63,24 @@ def addingcustomer():
             return render_template("signup.html",message=message),201
            
     return render_template('signup.html', message=message),400
+
+
+
+@customer_bp.route('/temperature')
+def temperature():
+    return render_template("temperature.html", thresholds=mosquitto.read_thresholds())
+
+
+@customer_bp.route('/sensors', methods=['GET'])
+def get_sensors():
+    return jsonify(mosquitto.get_sensor_data())
+
+
+@customer_bp.route('/thresholds', methods=['POST'])
+def update_thresholds():
+    new_data = request.get_json(silent=True) or {}
+    try:
+        thresholds = mosquitto.update_thresholds(new_data)
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    return jsonify({"status": "saved", "thresholds": thresholds})
