@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Add Customer</title>
+    <link rel="stylesheet" type="text/css" href="../css/signup.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Add Customer</h1>
+
+        {% if message %}
+        <p class="message">{{ message }}</p>
+        {% endif %}
+
+        <form action="/add_customer" method="POST">
+            <input type="text" name="first_name" placeholder="First Name"
+                   required pattern="[A-Z][a-z]+"
+                   title="Only letters, starting with a capital (e.g. John)">
+
+            <input type="text" name="last_name" placeholder="Last Name"
+                   required pattern="[A-Z][a-z]+"
+                   title="Only letters, starting with a capital (e.g. Smith)">
+
+            <input type="tel" name="tel_number" placeholder="Phone Number (111-111-1111)"
+                   required pattern="\d{3}-\d{3}-\d{4}$"
+                   title="Format: 111-111-1111">
+
+            <input type="email" name="email" placeholder="Email (example@gmail.com)"
+                   required pattern="(?=.{6,30}@)[a-zA-Z0-9]+(\.[a-z0-9]+)*@gmail\.com"
+                   title="Gmail address, 6-30 characters before the @ (e.g. example.ch05@gmail.com)">
+
+            <input type="text" name="customer_address" placeholder="Address" required>
+
+            <button type="submit">Add Customer</button>
+        </form>
+
+        <form class="secondary" action="/temperature" method="GET">
+            <button type="submit">Temperature page</button>
+        </form>
+    </div>
+</body>
+</html>
