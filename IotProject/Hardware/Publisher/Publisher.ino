@@ -53,6 +53,7 @@ void setup_wifi() {
   Serial.println("\nWiFi connected");
 }
 
+
 void reconnect() {
   // Loop until we're reconnected
   while (!client.connected()) {
