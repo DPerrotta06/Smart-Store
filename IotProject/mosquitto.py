@@ -1,6 +1,10 @@
 import json
 import os
 import threading
+import time
+from Hardware.Email import send_email, wait_for_reply
+from Hardware.fan import fan
+
  
 import paho.mqtt.client as mqtt
  
@@ -13,6 +17,8 @@ TOPICS = ("Frig1", "Frig2")
 #   mqtt_service.THRESHOLD_FILE = os.path.join(app.root_path, "thresholds.json")
 THRESHOLD_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "thresholds.json")
 DEFAULT_LIMIT = 25.0
+ALERT_COOLDOWN = 120
+last_alert = {}
  
 # Latest live readings, None until the first message arrives
 sensor_data = {t: {"temperature": None, "humidity": None} for t in TOPICS}
@@ -80,8 +86,17 @@ def on_connect(client, _userdata, _flags, _reason_code, _properties):
     # Subscribing here means the subscriptions come back after a reconnect
     for topic in TOPICS:
         client.subscribe(topic)
- 
- 
+
+
+def fridge_alert():
+    try:
+        send_email()
+        if wait_for_reply():
+            fan.on()
+    except Exception as e:
+        print(f"Alert could not be sent: {e}")
+
+
 def on_message(_client, _userdata, msg):
     if msg.topic not in sensor_data:
         return
@@ -94,7 +109,12 @@ def on_message(_client, _userdata, msg):
         return
  
     sensor_data[msg.topic] = {"temperature": temperature, "humidity": humidity}
-    # Alert email / fan logic can go here, using read_thresholds()
+    #Temp alert
+    limit = read_thresholds()[msg.topic]
+    now = time.time()
+    if temperature > limit and now - last_alert.get(msg.topic, 0) > ALERT_COOLDOWN:
+        last_alert[msg.topic] = now
+        threading.Thread(target=fridge_alert(), args=(msg.topic, temperature), daemon=True).start()
  
  
 client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
