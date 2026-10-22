@@ -3,14 +3,15 @@ import os
 import threading
  
 import paho.mqtt.client as mqtt
+
+
+
+#mosquitto_pub -h localhost -t "Frig1" -m '{"temperature": 30, "humidity": 55.0}'
+
  
-BROKER = "10.0.0.148"
-PORT = 1883
 TOPICS = ("Frig1", "Frig2")
  
-# Absolute path next to this file, so it does not depend on where Flask is launched.
-# To change it, set it from app.py before the app starts:
-#   mqtt_service.THRESHOLD_FILE = os.path.join(app.root_path, "thresholds.json")
+
 THRESHOLD_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "thresholds.json")
 DEFAULT_LIMIT = 25.0
  
@@ -105,3 +106,4 @@ client.on_message = on_message
 def start():
     client.connect("localhost", 1883)
     client.loop_start()
+
