@@ -85,8 +85,3 @@ def wait_for_reply(fridge, timeout = 300, interval = 10):
         time.sleep(interval)
     return False
 
-
-#TESTING REMOVE BEFORE DEMO IN CLASS!!!!
-if __name__ == "__main__":
-    send_email("Frig1", 9.5)
-    print(wait_for_reply("Frig1", timeout=100))
