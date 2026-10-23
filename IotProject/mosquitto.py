@@ -1,12 +1,14 @@
 import json
 import os
 import threading
-import time
-from Hardware.Email import send_email, wait_for_reply
-from Hardware.fan import fan
-
- 
 import paho.mqtt.client as mqtt
+import time
+from Hardware.fan import fan
+from Hardware.alert_email import send_email, wait_for_reply
+
+COOLDOWN = 600
+pending = set()
+last_asked = {}
 
 
 
@@ -18,14 +20,33 @@ TOPICS = ("Frig1", "Frig2")
 
 THRESHOLD_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "thresholds.json")
 DEFAULT_LIMIT = 25.0
-ALERT_COOLDOWN = 120
-last_alert = {}
  
 # Latest live readings, None until the first message arrives
 sensor_data = {t: {"temperature": None, "humidity": None} for t in TOPICS}
  
 file_lock = threading.Lock()
- 
+
+
+def _ask_admin(fridge, temp, turn_on):
+    question = ("Would you like to turn ON the fan? (YES or NO)" if turn_on
+                else "Temperature is back under the limit. Turn OFF the fan? (YES or NO)")
+    try:
+        send_email(fridge, temp, question)
+        if wait_for_reply(fridge):
+            fan.on() if turn_on else fan.off()
+    finally:
+        last_asked[fridge] = time.time()
+        pending.discard(fridge)
+
+
+def _all_under_limit():
+    limits = read_thresholds()
+    for t in TOPICS:
+        temp = sensor_data[t]["temperature"]
+        if temp is not None and temp > limits[t]:
+            return False
+    return True
+
  
 # --- JSON file helpers ---
  
@@ -87,17 +108,8 @@ def on_connect(client, _userdata, _flags, _reason_code, _properties):
     # Subscribing here means the subscriptions come back after a reconnect
     for topic in TOPICS:
         client.subscribe(topic)
-
-
-def fridge_alert():
-    try:
-        send_email()
-        if wait_for_reply():
-            fan.on()
-    except Exception as e:
-        print(f"Alert could not be sent: {e}")
-
-
+ 
+ 
 def on_message(_client, _userdata, msg):
     if msg.topic not in sensor_data:
         return
@@ -110,13 +122,20 @@ def on_message(_client, _userdata, msg):
         return
  
     sensor_data[msg.topic] = {"temperature": temperature, "humidity": humidity}
-    #Temp alert
+    # Alert email / fan logic can go here, using read_thresholds()
+    if msg.topic in pending or time.time() - last_asked.get(msg.topic, 0) < COOLDOWN:
+        return
     limit = read_thresholds()[msg.topic]
-    now = time.time()
-    if temperature > limit and now - last_alert.get(msg.topic, 0) > ALERT_COOLDOWN:
-        last_alert[msg.topic] = now
-        threading.Thread(target=fridge_alert(), args=(msg.topic, temperature), daemon=True).start()
- 
+    if temperature > limit and not fan.is_on():
+        turn_on = True
+    elif fan.is_on() and _all_under_limit():
+        turn_on = False
+    else:
+        return
+    pending.add(msg.topic)
+    threading.Thread(target=_ask_admin, args=(msg.topic, temperature, turn_on), daemon=True).start()
+
+
  
 client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 client.on_connect = on_connect
