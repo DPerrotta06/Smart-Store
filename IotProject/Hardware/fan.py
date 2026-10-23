@@ -4,7 +4,7 @@ from threading import Lock
 
 ENABLE_PIN = 22  # Enable pin on the motor driver
 IN1_PIN = 27     # Input pin 1
-IN2_PIN = 18     # Input pin 2
+IN2_PIN = 17    # Input pin 2
 
 
 class Fan:
