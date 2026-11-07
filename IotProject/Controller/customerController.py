@@ -1,6 +1,7 @@
 from flask import Blueprint, request, redirect, render_template, jsonify
 from Model.customerModel import Customer,saveCustomer,selectCustomerByEmail
 from GeneralFunction.generalFunction import normalizeEmail
+from datetime import date
 import uuid
 import re
 import mosquitto
@@ -22,6 +23,9 @@ def addingcustomer():
     tel_number=request.form.get('tel_number')
     email=request.form.get('email')
     customer_address=request.form.get('customer_address')
+    member_since=date.today()
+    points=0
+    password=request.form.get('password') #ADD A CREATE PASSWORD FIELD IN THE FRONT END
     message=""
     
     
@@ -29,6 +33,7 @@ def addingcustomer():
     patternForName=r"^[A-Z][a-z]+$"
     patternForTel=r"^\d{3}-\d{3}-\d{4}$"
     patternForEmail=r"^(?=.{6,30}@)[a-zA-Z0-9]+(?:\.[a-z0-9]+)*@gmail\.com$" 
+    patternForPw = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$"
     error=False
 
     if not re.fullmatch(patternForName,first_name):
@@ -43,6 +48,9 @@ def addingcustomer():
     if not re.fullmatch(patternForEmail,email):
         error=True
         message+="The email is incorrect: example.ch05@gmail.com or example@gmail.com\n"
+    if not re.fullmatch(patternForPw, password):
+        error=True
+        message+="The password needs a minimum of 8 characters, at least one uppercase letter, one lowercase letter, one digit, and one special character:"
     if(error==False):
         emailNormalized=normalizeEmail(email)
         modelResponse=selectCustomerByEmail(emailNormalized)
@@ -57,14 +65,20 @@ def addingcustomer():
                         tel_number=tel_number,
                         email=emailNormalized,
                         customer_address=customer_address,
-                        customer_uuid=str(uuid.uuid4())
+                        customer_uuid=str(uuid.uuid4()),
+                        member_since=member_since,
+                        points=points,
+                        password=password
                         )
             saveCustomer(new_customer)
             return render_template("signup.html",message=message),201
            
     return render_template('signup.html', message=message),400
 
-
+@customer_bp.route('/receipt', methods=['GET'])
+def sendReceipt():
+    #TELL USER TO CHECK THEIR EMAILS FOR THE RECEIPT HERE
+    return
 
 @customer_bp.route('/temperature')
 def temperature():

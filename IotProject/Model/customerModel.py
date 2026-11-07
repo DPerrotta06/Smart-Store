@@ -15,6 +15,8 @@ class Customer(db.Model):
     customer_address= db.Column(db.String, nullable=False)
     member_since= db.Column(db.String, server_default= func.now())
     customer_uuid=db.Column(db.String, nullable=False, unique=True)
+    points=db.Column(db.Integer, nullable=True)
+    password=db.Column(db.String(255), nullable=False, unique=True)
     
 
 
