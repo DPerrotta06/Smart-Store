@@ -1,6 +1,6 @@
-from flask import Blueprint, render_template, session
+from flask import Blueprint, render_template, session, jsonify
 from Model.receiptModel import getCustomerReceipt, getAllCustomerReceipts
-from Receipt.receipt_email import send_receipt_email
+from Receipts.receipt_email import send_receipt_email
 
 receipt_bp = Blueprint('receipt_bp', __name__, template_folder='../View/html', static_folder='../View/css')
 

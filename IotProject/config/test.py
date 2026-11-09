@@ -1,11 +1,11 @@
 import uuid
 from sqlalchemy import select
-from app import app                                   # adjust
+from app import app
 from Database.db import db
 from Model.customerModel import Customer, saveCustomer
 from Model.receiptModel import (Receipt, saveCustomerReceipt,
                                 getCustomerReceipt, getAllCustomerReceipts)
-from Receipt.receipt_email import send_receipt_email
+from Receipts.receipt_email import send_receipt_email
 
 TEST_EMAIL = "your.own.address@gmail.com"
 
