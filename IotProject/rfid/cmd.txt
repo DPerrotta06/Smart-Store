@@ -1,0 +1,3 @@
+sudo modprobe usbserial
+echo "0483 5750" | sudo tee /sys/bus/usb-serial/drivers/generic/new_id
+0483 5750

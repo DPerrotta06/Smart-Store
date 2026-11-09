@@ -1,7 +1,8 @@
 from flask import Flask
 from Database.db import db
 from Controller.customerController import customer_bp
-from Controller.fanController import fan_bp
+from Controller.fanController import fan_bps
+from Controller.checkoutController import checkout_bp
 import os
 import mosquitto
 from Controller.fanController import fan_bp
@@ -12,6 +13,10 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir,'Dat
 db.init_app(app)
 app.register_blueprint(customer_bp)
 app.register_blueprint(fan_bp)
+app.register_blueprint(checkout_bp)
+
+with app.app_context():       
+    db.create_all()
 
 mosquitto.start()
 
