@@ -75,11 +75,6 @@ def addingcustomer():
            
     return render_template('signup.html', message=message),400
 
-@customer_bp.route('/receipt', methods=['GET'])
-def sendReceipt():
-    #TELL USER TO CHECK THEIR EMAILS FOR THE RECEIPT HERE
-    return
-
 @customer_bp.route('/temperature')
 def temperature():
     return render_template("temperature.html", thresholds=mosquitto.read_thresholds())
