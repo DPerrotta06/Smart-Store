@@ -1,7 +1,7 @@
 from flask import Flask
 from Database.db import db
 from Controller.customerController import customer_bp
-from Controller.fanController import fan_bps
+from Controller.fanController import fan_bp
 from Controller.checkoutController import checkout_bp
 import os
 import mosquitto
