@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Store - RFID Test</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+        .scanner-box {
+            max-width: 500px;
+            margin: 50px auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .pulse-icon {
+            color: #0d6efd;
+            transition: transform 0.2s;
+        }
+        .scanning {
+            animation: pulse 1.5s infinite;
+            color: #dc3545 !important;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="scanner-box text-center">
+        <h2 class="mb-4">Hardware RFID Test</h2>
+        
+        <div class="mb-4">
+            <h1 class="pulse-icon" id="statusIcon">📡</h1>
+            <p class="text-muted small" id="statusText">Scanner Port: <strong>/dev/ttyUSB0</strong> (Ready)</p>
+        </div>
+
+        <!-- NEW LIST SECTION -->
+        <div class="mb-3 text-start">
+            <label class="form-label fw-bold">Detected EPC Tags</label>
+            <ul class="list-group font-monospace shadow-sm mb-3" id="epcList">
+                <li class="list-group-item text-muted text-center" id="emptyMessage">
+                    <em>Waiting for scan...</em>
+                </li>
+            </ul>
+        </div>
+        
+        <div class="mb-4 text-start">
+            <label class="form-label fw-bold">Raw Hardware Hex Stream</label>
+            <textarea class="form-control text-muted font-monospace bg-light" id="rawStream" rows="3" disabled style="font-size: 0.85rem;">Hardware stream will appear here...</textarea>
+        </div>
+
+        <button id="scanBtn" class="btn btn-primary w-100 py-2 fw-bold">
+            Trigger 2-Second Scan
+        </button>
+    </div>
+</div>
+
+<script>
+    // Keep track of tags we've already added to the UI
+    const seenTags = new Set();
+
+    document.getElementById('scanBtn').addEventListener('click', async function() {
+        const btn = this;
+        const icon = document.getElementById('statusIcon');
+        const statusText = document.getElementById('statusText');
+        const epcList = document.getElementById('epcList');
+        const rawStream = document.getElementById('rawStream');
+        const emptyMessage = document.getElementById('emptyMessage');
+
+        // Update UI to scanning state
+        btn.disabled = true;
+        btn.innerText = "Scanning... Please wait";
+        icon.classList.add('scanning');
+        statusText.innerText = "Reading from /dev/ttyUSB0...";
+        rawStream.value = "Reading data...";
+
+        try {
+            // Call the Python backend
+            const response = await fetch('/api/scan');
+            const data = await response.json();
+
+            // Update raw hex textarea
+            rawStream.value = data.raw_hex || "No data received from hardware.";
+            
+            if (data.tags && data.tags.length > 0) {
+                // Remove the "Waiting for scan..." message if it's there
+                if (emptyMessage) emptyMessage.remove();
+
+                data.tags.forEach(tag => {
+                    // Only add the tag to the list if it hasn't been scanned yet
+                    if (!seenTags.has(tag)) {
+                        seenTags.add(tag);
+
+                        // Create a new list item
+                        const li = document.createElement('li');
+                        li.className = "list-group-item list-group-item-success d-flex justify-content-between align-items-center fw-bold text-primary";
+                        li.innerHTML = `${tag} <span class="badge bg-primary rounded-pill">New</span>`;
+                        
+                        // Add it to the top of the list
+                        epcList.prepend(li);
+                    }
+                });
+            }
+        } catch (error) {
+            rawStream.value = "Error connecting to scanner: " + error;
+        } finally {
+            // Reset UI state
+            btn.disabled = false;
+            btn.innerText = "Trigger 2-Second Scan";
+            icon.classList.remove('scanning');
+            statusText.innerHTML = "Scanner Port: <strong>/dev/ttyUSB0</strong> (Ready)";
+        }
+    });
+</script>
+</body>
+</html>
