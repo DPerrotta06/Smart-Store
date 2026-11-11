@@ -5,11 +5,12 @@ from decimal import Decimal
 
 class Receipt(db.Model):
     __tablename__ = "Receipt"
-    receipt_id=db.Column(db.Integer, primary_key=True)
-    total=db.Column(db.Numeric(10,2), nullable=False)
-    points_earned=db.Column(db.Numeric(10,2), nullable=False, default=0)
-    purchased_at=db.Column(db.Text, nullable=False, server_default= func.now())
-    membership_number=db.Column(db.Integer, db.ForeignKey("Customer.membership_number"), nullable=False)
+    receipt_id = db.Column(db.Integer, primary_key=True)
+    total = db.Column(db.Numeric(10,2), nullable=False)
+    points_earned = db.Column(db.Numeric(10,2), nullable=False, default=0)
+    purchased_at = db.Column(db.Text, nullable=False, server_default=func.now())
+    membership_number = db.Column(db.Integer, db.ForeignKey("Customer.membership_number"), nullable=True)
+
 
 def saveCustomerReceipt(receipt: Receipt):
     try:

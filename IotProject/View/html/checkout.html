@@ -27,6 +27,10 @@
         <p class="text-muted">Place all your items near the reader, then scan.</p>
 
         <button id="scanBtn" class="btn btn-primary w-100 py-2 fw-bold mb-3">Scan items</button>
+        <div class="input-group mb-3">
+            <input type="text" id="manualEpcInput" class="form-control font-monospace" placeholder="Enter EPC manually..." aria-label="Manual EPC entry">
+            <button class="btn btn-outline-primary fw-bold" type="button" id="manualAddBtn">Add Item</button>
+        </div>
         <div id="message" class="mb-3" role="status"></div>
 
         <table class="table align-middle">
@@ -49,6 +53,51 @@
     </div>
 </div>
 
+<!-- Mock Payment Modal -->
+<div class="modal fade" id="paymentModal" tabindex="-1" aria-labelledby="paymentModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="paymentModalLabel">Complete Checkout</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="paymentForm">
+                    <div id="paymentMessage"></div>
+
+                    <div class="mb-4 pb-3 border-bottom">
+                        <h6 class="fw-bold text-primary mb-2">Do you have a membership card?</h6>
+                        <label for="membershipNumber" class="form-label text-muted small">Enter your Membership Number below, or leave blank to checkout as a guest.</label>
+                        <input type="number" min="1" class="form-control font-monospace" id="membershipNumber" placeholder="e.g. 1">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="cardNumber" class="form-label fw-bold">Card Number</label>
+                        <input type="text" class="form-control font-monospace" id="cardNumber" placeholder="1234 5678 1234 5678" maxlength="19" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label for="expiryDate" class="form-label fw-bold">Expiry Date</label>
+                            <input type="text" class="form-control font-monospace" id="expiryDate" placeholder="MM/YY" maxlength="5" required>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label for="cvv" class="form-label fw-bold">CVV</label>
+                            <input type="password" class="form-control font-monospace" id="cvv" placeholder="123" maxlength="3" required>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success fw-bold" id="submitPaymentBtn">Pay Now</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bootstrap JS required for the Modal to function -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
 <script>
     const money = n => '$' + Number(n).toFixed(2);
     const cartBody = document.getElementById('cartBody');
@@ -56,13 +105,17 @@
     const payBtn = document.getElementById('payBtn');
     const message = document.getElementById('message');
     const scanBtn = document.getElementById('scanBtn');
+    
+    // --- Handle Manual EPC Entry ---
+    const manualAddBtn = document.getElementById('manualAddBtn');
+    const manualEpcInput = document.getElementById('manualEpcInput');
 
     function showMessage(text, kind) {
         message.innerHTML = '';
         if (!text) return;
         const div = document.createElement('div');
         div.className = 'alert alert-' + kind + ' py-2 mb-0';
-        div.textContent = text;          // textContent, so tag or product text is never run as HTML
+        div.textContent = text;
         message.appendChild(div);
     }
 
@@ -132,7 +185,109 @@
         }
     });
 
-    loadCart();   // show the open cart when the page loads
+    manualAddBtn.addEventListener('click', async () => {
+        const epcValue = manualEpcInput.value.trim();
+        
+        if (!epcValue) {
+            showMessage('Please enter an EPC value.', 'warning');
+            return;
+        }
+
+        manualAddBtn.disabled = true;
+        manualAddBtn.textContent = 'Adding...';
+
+        try {
+            const res = await fetch('/api/manual_scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ epc: epcValue })
+            });
+            
+            const data = await res.json();
+            renderCart(data);
+            
+            if (data.error) {
+                showMessage(data.error, 'danger');
+            } else {
+                showMessage('Successfully added: ' + data.added[0], 'success');
+                manualEpcInput.value = ''; 
+            }
+        } catch (err) {
+            showMessage('Server error: ' + err, 'danger');
+        } finally {
+            manualAddBtn.disabled = false;
+            manualAddBtn.textContent = 'Add Item';
+        }
+    });
+
+    manualEpcInput.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            manualAddBtn.click();
+        }
+    });
+
+    // --- Handle Payment Modal & Submission ---
+    const paymentModal = new bootstrap.Modal(document.getElementById('paymentModal'));
+    const paymentMessage = document.getElementById('paymentMessage');
+
+    payBtn.addEventListener('click', () => {
+        paymentMessage.innerHTML = '';
+        document.getElementById('paymentForm').reset();
+        paymentModal.show();
+    });
+
+    document.getElementById('submitPaymentBtn').addEventListener('click', async () => {
+        // Grab the value from the updated integer Membership Number field
+        const membershipNum = document.getElementById('membershipNumber').value.trim();
+        const card = document.getElementById('cardNumber').value.replace(/\s/g, '');
+        const expiry = document.getElementById('expiryDate').value;
+        const cvv = document.getElementById('cvv').value;
+
+        // Validation
+        if (!/^\d{16}$/.test(card)) {
+            return paymentMessage.innerHTML = '<div class="alert alert-danger py-2">Invalid card number. Must be 16 digits.</div>';
+        }
+        if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(expiry)) {
+            return paymentMessage.innerHTML = '<div class="alert alert-danger py-2">Invalid expiry. Use MM/YY.</div>';
+        }
+        if (!/^\d{3}$/.test(cvv)) {
+            return paymentMessage.innerHTML = '<div class="alert alert-danger py-2">Invalid CVV. Must be 3 digits.</div>';
+        }
+
+        const btn = document.getElementById('submitPaymentBtn');
+        btn.disabled = true;
+        btn.textContent = 'Processing...';
+
+        try {
+            const res = await fetch('/api/pay', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    card: card.slice(-4),
+                    membership_number: membershipNum // Pass to backend using the new key
+                })
+            });
+            
+            const data = await res.json();
+            
+            if (res.ok) {
+                // Save the order to session storage so the next page can display it
+                sessionStorage.setItem('lastOrder', JSON.stringify(data.order_summary));
+                window.location.href = '/thank_you';
+            } else {
+                paymentMessage.innerHTML = `<div class="alert alert-danger py-2">${data.error}</div>`;
+            }
+
+        } catch (err) {
+            paymentMessage.innerHTML = `<div class="alert alert-danger py-2">Server error: ${err}</div>`;
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Pay Now';
+        }
+    });
+
+    loadCart(); 
 </script>
 </body>
 </html>

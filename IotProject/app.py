@@ -6,6 +6,9 @@ from Controller.checkoutController import checkout_bp
 import os
 import mosquitto
 from Controller.fanController import fan_bp
+from Model.customerModel import Customer
+from Model.receiptModel import Receipt
+from Model.checkoutModels import Cart, CartItem, Product
 
 app= Flask(__name__)
 basedir=os.path.abspath(os.path.dirname(__file__))
@@ -15,9 +18,8 @@ app.register_blueprint(customer_bp)
 app.register_blueprint(fan_bp)
 app.register_blueprint(checkout_bp)
 
-with app.app_context():       
+with app.app_context():
     db.create_all()
-
 mosquitto.start()
 
 if __name__=='__main__':

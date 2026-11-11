@@ -1,3 +1,9 @@
+import sys
+from unittest.mock import MagicMock
+sys.modules['RPi'] = MagicMock()
+sys.modules['RPi.GPIO'] = MagicMock()
+#adding mock libraries for windows machine
+
 import RPi.GPIO as GPIO
 from threading import Lock
 

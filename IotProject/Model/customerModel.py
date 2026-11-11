@@ -7,7 +7,7 @@ from GeneralFunction.generalFunction import normalizeEmail
 
 class Customer(db.Model):
     __tablename__ = "Customer"
-    customer_id= db.Column(db.Integer, primary_key=True)
+    membership_number = db.Column(db.Integer, primary_key=True)
     last_name= db.Column(db.String, nullable=False)
     first_name= db.Column(db.String, nullable=False)
     tel_number= db.Column(db.String, nullable=False)
