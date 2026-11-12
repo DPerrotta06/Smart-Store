@@ -5,9 +5,9 @@ from Controller.adminController import admin_bp
 from Controller.checkoutController import checkout_bp
 
 import os
-import mosquitto
+#import mosquitto
 import secrets
-from Controller.fanController import fan_bp
+#from Controller.fanController import fan_bp
 
 app= Flask(__name__)
 
@@ -21,9 +21,9 @@ db.init_app(app)
 
 app.register_blueprint(customer_bp)
 app.register_blueprint(checkout_bp)
-app.register_blueprint(fan_bp)
+#app.register_blueprint(fan_bp)
 app.register_blueprint(admin_bp)
-mosquitto.start()
+#mosquitto.start()
 
 if __name__=='__main__':
     app.run(debug=True,use_reloader=False)

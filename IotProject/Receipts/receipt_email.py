@@ -26,7 +26,7 @@ def _build_bodies(customer, receipt, items):
         "", 
         f"Total: ${receipt.total:.2f}", 
         f"Points Earned: {receipt.points_earned:.2f}", 
-        f"Total Points: {customer.points}"
+         f"Total Points: {customer.points}"
     ]
     html = f"""
     <h2>Thank you for your purchase, {escape(customer.first_name)}!</h2>
