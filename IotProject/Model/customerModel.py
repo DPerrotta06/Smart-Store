@@ -15,7 +15,7 @@ class Customer(db.Model):
     email = db.Column(db.String, nullable=False, unique=True)
     customer_address = db.Column(db.String, nullable=False)
     member_since = db.Column(db.String, nullable=False, server_default=func.now())
-    points = db.Column(db.Integer)
+    points = db.Column(db.Integer,server_default="0")
     password = db.Column(db.LargeBinary, nullable=False, unique=True)
     
     
@@ -39,6 +39,7 @@ def saveCustomer(customer: Customer):
             db.session.add(customer)
             db.session.commit()
             return True
-        except IntegrityError:
+        except IntegrityError as e:
+            print(e)
             db.session.rollback()
             return False

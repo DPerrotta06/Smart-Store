@@ -101,6 +101,7 @@ def loginPage():
 
 @customer_bp.route('/signup', methods=['POST'])
 def signupPage():
+    print(1)
     data = request.get_json(silent=True) or {}
     field = lambda name: (data.get(name) or '').strip()
     first_name, last_name = field('first_name'), field('last_name')
@@ -123,16 +124,20 @@ def signupPage():
         message += "The address is required\n"
     if message:
         return fail(message)
+    print(2)
+
 
     emailNormalized = normalizeEmail(email)
     if selectCustomerByEmail(emailNormalized):
         return fail("Customer already exists")
+    print(3)
 
     hashed_password = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
     card_number = freshCardNumber()
     saved = saveCustomer(Customer(first_name=first_name, last_name=last_name, tel_number=tel_number,
                                   email=emailNormalized, customer_address=customer_address,
                                   password=hashed_password, card_number=card_number))
+    print(4)
     if not saved:
         return fail("Could not create the account. Try again.", 500)
     return jsonify(ok=True, message=f"Account created. Your membership number is {card_number}."), 201

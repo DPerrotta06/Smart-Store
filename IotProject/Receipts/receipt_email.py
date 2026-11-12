@@ -9,9 +9,9 @@ from Model.receiptModel import Receipt
 
 #load_dotenv()
 SMTP_SERVER = "smtp.gmail.com"
-SMTP_PORT = 587
-SENDER_EMAIL = os.getenv("SENDER_EMAIL")
-SENDER_PASSWORD = os.getenv("SENDER_PASSWORD")
+SMTP_PORT = 465
+SENDER_EMAIL = "shon.ch05@gmail.com"#os.getenv("SENDER_EMAIL")
+SENDER_PASSWORD =  "mdad mabx gapk tsdo"#os.getenv("SENDER_PASSWORD")
 
 def _build_bodies(customer, receipt, items):
     text = [
@@ -55,7 +55,7 @@ def send_receipt_email(receipt: Receipt):
 
     try:
         with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
-            server.login(SENDER_EMAIL, SENDER_PASSWORD)
+            server.login(SENDER_EMAIL,SENDER_PASSWORD)
             server.send_message(msg)
         return True, "Email sent successfully"
     except Exception as e:
