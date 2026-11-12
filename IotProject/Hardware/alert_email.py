@@ -6,10 +6,8 @@ import email
 from email.utils import parsedate_to_datetime
 from email.message import EmailMessage
 from email.header import decode_header
-from dotenv import load_dotenv
 
 
-load_dotenv() #used personal email and don't want to expose myself to the internet on github
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")
@@ -22,12 +20,12 @@ RECEIVER_EMAIL = os.getenv("RECEIVER_EMAIL")
 #The email is sent securely via TLS encryption.
 # @param fridge
 # @param temp
-def send_email(fridge, temp):
+def send_email(fridge, temp, question="Would you like to turn on the fan? (YES or NO)"):
     payload = EmailMessage()
-    payload["Subject"] = "Temperature Inquiry"
+    payload["Subject"] = f"Temperature Inquiry ({fridge})"
     payload["FROM"] = SENDER_EMAIL
     payload["TO"] = RECEIVER_EMAIL
-    payload.set_content(f"The temperature of {fridge} is {temp}°C.\nWould you like to turn on the fan? (YES or NO)") 
+    payload.set_content(f"The temperature of {fridge} is {temp}°C.\n{question}") 
     with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
         server.starttls() #Encryption channel for emails
         server.login(SENDER_EMAIL, SENDER_PASSWORD)
@@ -38,12 +36,12 @@ def send_email(fridge, temp):
 #This function handles the receiving the content of the email.
 # @param msg
 def receive_email(msg):
-    email_body = ""
-    if msg.is_multipart(): #part of the email library, it checks if an email has content other than plain text, for example file attachments in the body
-        for part in msg.walk(): #walk() will loop through each nested part of the email if it does contain different types of content
-            if part.get_content_type() == "text/plain": #checks if it is text, which is what we want
-                email_body = part.get_payload(decode=True).decode(errors="ignore") #gets and decodes the email into a python string
-    return email_body
+    for part in msg.walk():
+        if part.get_content_type() == "text/plain":
+            payload = part.get_payload(decode=True)
+            if payload:
+                return payload.decode(part.get_content_charset() or "utf-8", errors="ignore")
+    return ""
 
 
 # Checks if the admin replied with a YES
@@ -55,7 +53,7 @@ def is_yes(fridge, since):
     try:
         email_recipient.login(SENDER_EMAIL, SENDER_PASSWORD)
         email_recipient.select("inbox")
-        _, found = email_recipient.search(None, f'(UNSEEN FROM "{RECEIVER_EMAIL}" SUBJECT "Temperature Inquiry")') #ignore the status and sends a search request for the email that was recently sent
+        _, found = email_recipient.search(None, f'(UNSEEN FROM "{RECEIVER_EMAIL}" SUBJECT "Temperature Inquiry ({fridge})")') #ignore the status and sends a search request for the email that was recently sent
         ids = found[0].split()
         if not ids:
             return None
@@ -78,10 +76,9 @@ def is_yes(fridge, since):
 def wait_for_reply(fridge, timeout = 300, interval = 10):
     start = time.time()
     end = start + timeout
-    while start < end:
+    while time.time() < end:
         answer = is_yes(fridge, start)
         if answer is not None:
             return answer
         time.sleep(interval)
     return False
-

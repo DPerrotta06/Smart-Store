@@ -1,0 +1,78 @@
+*{box-sizing:border-box}
+
+body{
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  background:#f5f5f5;color:#222;margin:0;padding:40px 16px;
+}
+
+.container{
+  max-width:400px;margin:0 auto;background:#fff;padding:24px;
+  border:1px solid #ddd;border-radius:6px;
+}
+
+h1{font-size:1.4rem;margin:0 0 16px}
+h2{font-size:1.1rem;margin:24px 0 8px}
+
+.message{
+  white-space:pre-line;padding:10px 12px;margin:0 0 16px;border-radius:4px;
+  background:#eef2f7;border:1px solid #cdd6e2;
+}
+
+.button{
+  display:block;padding:10px;font-size:1rem;text-align:center;text-decoration:none;
+  color:#fff;background:#2b6cb0;border:none;border-radius:4px;cursor:pointer;
+}
+.button:hover{background:#245a94}
+.button:focus-visible{outline:2px solid #2b6cb0;outline-offset:2px}
+
+.secondary{margin-top:24px}
+.secondary .button{color:#222;background:#e5e5e5}
+.secondary .button:hover{background:#d6d6d6}
+
+/* ---- Account details ---- */
+dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 12px}
+dt{color:#555}
+dd{margin:0;text-align:right;font-weight:600;overflow-wrap:anywhere}
+
+.points{
+  display:flex;justify-content:space-between;align-items:baseline;
+  margin:16px 0 0;padding:12px;border:1px solid #cdd6e2;border-radius:4px;background:#eef2f7;
+}
+.points strong{font-size:1.6rem;color:#2b6cb0}
+
+/* ---- Purchase history (each receipt expands) ---- */
+.receipts{display:flex;flex-direction:column;gap:8px}
+
+details{border:1px solid #ddd;border-radius:4px}
+summary{
+  display:grid;grid-template-columns:1fr auto auto;gap:12px;
+  padding:10px;cursor:pointer;font-size:.9rem;list-style:none;
+}
+summary::-webkit-details-marker{display:none}
+summary:hover{background:#f5f5f5}
+summary:focus-visible{outline:2px solid #2b6cb0;outline-offset:1px}
+summary small{display:block;color:#555}
+summary .pts{color:#2b6cb0;font-weight:600;text-align:right}
+summary .total{text-align:right}
+
+details[open] summary{border-bottom:1px solid #ddd}
+
+.items{width:100%;border-collapse:collapse;font-size:.85rem}
+.items td{padding:6px 10px}
+.items td:last-child{text-align:right}
+
+.empty{color:#555;margin:0}
+
+/* ---- Language switch (pure CSS, radio buttons) ---- */
+.lang-radio{position:absolute;opacity:0;pointer-events:none}
+.lang{display:flex;justify-content:flex-end;gap:6px;max-width:400px;margin:0 auto 12px}
+.lang label{
+  padding:4px 10px;font-size:.85rem;cursor:pointer;
+  background:#e5e5e5;border-radius:4px;
+}
+#en:checked ~ .lang label[for="en"],
+#fr:checked ~ .lang label[for="fr"]{background:#2b6cb0;color:#fff}
+#en:focus-visible ~ .lang label[for="en"],
+#fr:focus-visible ~ .lang label[for="fr"]{outline:2px solid #2b6cb0;outline-offset:2px}
+#en:checked ~ .container .fr{display:none}
+#fr:checked ~ .container .en{display:none}

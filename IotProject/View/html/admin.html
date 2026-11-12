@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Store admin</title>
+<link rel="stylesheet" href="{{ url_for('customer_bp.static', filename='style.css') }}">
+</head>
+<body>
+
+<header class="top">
+  <span class="brand">Smart Store · Product management</span>
+  <div class="who"><span>Admin</span><button class="btn alt sm" id="logoutBtn">Log out</button></div>
+</header>
+
+<main class="wrap">
+
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="products">Products</button>
+    <button role="tab" aria-selected="false" data-tab="receive">Receive stock</button>
+    <button role="tab" aria-selected="false" data-tab="inventory">Inventory</button>
+  </div>
+
+  <!-- PRODUCTS: register, edit, delete -->
+  <section id="products" class="panel">
+    <div class="row">
+      <h1>Products</h1>
+      <button class="btn" id="addBtn">Add product</button>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Name</th><th>Category</th><th>Price</th><th>UPC</th><th>EPC</th><th>Producer</th><th>In stock</th><th></th></tr></thead>
+        <tbody id="prodRows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- RECEIVE STOCK: quantity + date, one EPC per unit -->
+  <section id="receive" class="panel" hidden>
+    <h1>Receive stock</h1>
+    <p class="muted">Scan the barcode to pick the product, then scan every tag in the delivery.</p>
+    <form id="receiveForm">
+      <div class="cols">
+        <label>Product barcode (UPC)
+          <div class="input-btn"><input id="recUpc" maxlength="13" inputmode="numeric" placeholder="Scan or type the UPC" autocomplete="off" required>
+          <button type="button" class="btn alt" id="findBtn">Find</button></div></label>
+        <label>Date received<input type="date" id="recDate" required></label>
+      </div>
+      <p id="found" class="muted"></p>
+      <label>Add a tag by hand
+        <div class="input-btn"><input id="manualEpc" maxlength="24" placeholder="24-character EPC" autocomplete="off">
+        <button type="button" class="btn alt" id="manualAdd">Add</button></div></label>
+      <p><b>Tags scanned: <span id="tagCount">0</span></b> <span class="muted">(this is the quantity received)</span></p>
+      <ul class="epcs" id="epcList"></ul>
+      <p class="low" id="recMsg" style="white-space:pre-line"></p>
+      <div class="actions">
+        <button type="button" class="btn alt" id="rfidScan">Scan tags</button>
+        <button class="btn" id="saveRec" disabled>Save reception</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- INVENTORY: dashboard -->
+  <section id="inventory" class="stack" hidden>
+    <div class="stats">
+      <div class="panel"><strong id="sTypes">0</strong><span class="muted">Product types</span></div>
+      <div class="panel"><strong id="sUnits">0</strong><span class="muted">Units in stock</span></div>
+      <div class="panel"><strong id="sLow">0</strong><span class="muted" id="sLowLabel">Running low</span></div>
+    </div>
+    <div class="panel">
+      <h2>Stock by product</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Product</th><th>UPC</th><th>In stock</th><th>Last received</th></tr></thead>
+          <tbody id="invRows"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Reception history</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Date</th><th>Product</th><th>UPC</th><th>Quantity</th></tr></thead>
+          <tbody id="recRows"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- Add / edit product -->
+<dialog id="productDlg" aria-labelledby="prodTitle">
+  <form id="productForm">
+    <h2 id="prodTitle">Add product</h2>
+    <p class="low" id="prodMsg" style="white-space:pre-line"></p>
+    <label>Name<input name="name" maxlength="100" required></label>
+    <div class="cols">
+      <label>Category<input name="category" maxlength="50" required></label>
+      <label>Price ($)<input type="number" name="price" step="0.01" min="0" required></label>
+    </div>
+    <label>Barcode (UPC, 13 digits max)
+      <div class="input-btn"><input name="upc" maxlength="13" inputmode="numeric" autocomplete="off" required><button type="button" class="btn alt" id="upcScan">Scan</button></div></label>
+    <label id="epcLabel">RFID tag (EPC, 24 characters)
+      <div class="input-btn"><input name="epc" maxlength="24" autocomplete="off"><button type="button" class="btn alt" id="epcRead">Read tag</button></div></label>
+    <label>Producer company<input name="producer_company" maxlength="100" required></label>
+    <div class="actions">
+      <button type="button" class="btn alt" data-close>Cancel</button>
+      <button class="btn">Save product</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Delete confirmation -->
+<dialog id="deleteDlg" aria-labelledby="delTitle">
+  <h2 id="delTitle">Delete this product?</h2>
+  <p class="muted" id="delText">Past receipts keep their records. The units can no longer be sold.</p>
+  <div class="actions">
+    <button class="btn alt" data-close>Keep it</button>
+    <button class="btn danger" id="confirmDel">Delete product</button>
+  </div>
+</dialog>
+
+<div id="toasts" role="status" aria-live="polite"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const fmt = n => Number(n).toFixed(2);
+const IDLE_MS = 600000;   // leave the admin page after 10 minutes without activity
+
+// The login token arrives in the address (#token), is moved into page memory and removed from the address.
+let token = location.hash.slice(1);
+history.replaceState(null, '', location.pathname);
+if(!token) location.replace('/');
+
+let products = [], tags = [], selected = null, editUpc = null, deleteUpc = null, idleTimer = null;
+
+function leave(){ token = ''; location.replace('/') }
+function resetIdle(){ clearTimeout(idleTimer); idleTimer = setTimeout(leave, IDLE_MS) }
+['pointerdown','keydown'].forEach(ev => addEventListener(ev, resetIdle)); resetIdle();
+$('#logoutBtn').onclick = leave;
+
+function toast(msg, err){const t=document.createElement('div');t.className='toast'+(err?' err':'');t.textContent=msg;$('#toasts').append(t);setTimeout(()=>t.remove(),4000)}
+function el(tag, text, cls){const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e}
+function cell(content, cls){const td=el('td');if(content instanceof Node)td.append(content);else td.textContent=content;if(cls)td.className=cls;return td}
+function emptyRow(cols, text){const tr=el('tr'), td=cell(text,'empty');td.colSpan=cols;tr.append(td);return tr}
+async function api(url, method='GET', body){
+  try{
+    const res = await fetch(url, {method, headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body: body && JSON.stringify(body)});
+    const data = await res.json().catch(() => ({error:'Unexpected reply from the server.'}));
+    if(res.status === 401) leave();
+    return {...data, ok: res.ok, status: res.status};
+  }catch{ return {ok:false, status:0, error:'Could not reach the store. Try again.'} }
+}
+document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>b.closest('dialog').close());
+
+/* ---------- tabs ---------- */
+document.querySelectorAll('[data-tab]').forEach(tab=>tab.onclick=()=>{
+  document.querySelectorAll('[data-tab]').forEach(t=>t.setAttribute('aria-selected',t===tab));
+  ['products','receive','inventory'].forEach(id=>document.getElementById(id).hidden=(id!==tab.dataset.tab));
+  if(tab.dataset.tab === 'inventory') loadInventory();
+});
+
+/* ---------- products ---------- */
+function renderProducts(){
+  const body = $('#prodRows'); body.replaceChildren();
+  if(!products.length) body.append(emptyRow(8, 'No products yet. Add your first product to start receiving stock.'));
+  products.forEach(p => {
+    const tr = el('tr');
+    const det = el('details'), sum = el('summary', `${p.epcs.length} tag${p.epcs.length===1?'':'s'}`), ul = el('ul',undefined,'epcs');
+    p.epcs.forEach(t => ul.append(el('li', t.sold ? `${t.epc} (sold)` : t.epc, t.sold ? 'sold' : '')));
+    det.append(sum, ul);
+    const edit = el('button','Edit','btn alt sm'), del = el('button','Delete','btn danger sm');
+    edit.onclick = () => openProduct(p); del.onclick = () => openDelete(p);
+    const actions = el('div'); actions.append(edit, ' ', del);
+    tr.append(cell(p.name), cell(p.category), cell(`$${fmt(p.price)}`), cell(p.upc), cell(det), cell(p.producer_company),
+              cell(String(p.in_stock), p.in_stock === 0 ? 'low' : ''), cell(actions));
+    body.append(tr);
+  });
+}
+async function loadProducts(){ const r = await api('/admin/api/products'); if(r.ok){ products = r.products; renderProducts(); findProduct() } else toast(r.error, true) }
+
+const form = $('#productForm');
+function openProduct(p){
+  editUpc = p ? p.upc : null;
+  form.reset(); $('#prodMsg').textContent = '';
+  $('#prodTitle').textContent = p ? 'Edit product' : 'Add product';
+  $('#epcLabel').hidden = !!p; form.epc.required = !p;      // a type has many tags: they are added under Receive stock
+  form.upc.readOnly = !!p; $('#upcScan').hidden = !!p;      // the UPC identifies the type, so it cannot change
+  if(p){ form.name.value = p.name; form.category.value = p.category; form.price.value = p.price; form.upc.value = p.upc; form.producer_company.value = p.producer_company }
+  $('#productDlg').showModal();
+}
+$('#addBtn').onclick = () => openProduct(null);
+form.upc.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); (editUpc ? form.producer_company : form.epc).focus() } };  // barcode scanners press Enter
+form.epc.oninput = () => form.epc.value = form.epc.value.toUpperCase();
+$('#upcScan').onclick = () => { form.upc.focus(); toast('Scan the barcode now.') };
+$('#epcRead').onclick = async e => {
+  e.target.disabled = true; toast('Reading tag…');
+  const r = await api('/admin/api/scan', 'POST'); e.target.disabled = false;
+  if(!r.ok) return toast(r.error, true);
+  const fresh = r.epcs.filter(x => !r.known.includes(x));
+  if(fresh.length === 1){ form.epc.value = fresh[0]; toast('Tag read.') }
+  else if(fresh.length > 1) toast('Several tags are on the reader. Leave only one.', true);
+  else toast(r.known.length ? 'That tag is already registered.' : 'No tag found. Place one tag on the reader.', true);
+};
+form.onsubmit = async e => {
+  e.preventDefault();
+  const body = Object.fromEntries(new FormData(form));
+  const r = editUpc ? await api(`/admin/api/products/${encodeURIComponent(editUpc)}`, 'PUT', body) : await api('/admin/api/products', 'POST', body);
+  if(!r.ok){ $('#prodMsg').textContent = r.error; return }
+  $('#productDlg').close(); toast(r.message);
+  products = r.products; renderProducts(); findProduct(); loadInventory();
+};
+
+function openDelete(p){
+  deleteUpc = p.upc;
+  $('#delText').textContent = `${p.name} and its ${p.epcs.length} tag${p.epcs.length===1?'':'s'} can no longer be sold. Past receipts keep their records.`;
+  $('#deleteDlg').showModal();
+}
+$('#confirmDel').onclick = async () => {
+  const r = await api(`/admin/api/products/${encodeURIComponent(deleteUpc)}`, 'DELETE');
+  $('#deleteDlg').close();
+  if(!r.ok) return toast(r.error, true);
+  toast(r.message); products = r.products; renderProducts(); findProduct(); loadInventory();
+};
+
+/* ---------- receive stock ---------- */
+const today = new Date(); today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
+$('#recDate').value = today.toISOString().slice(0, 10);
+
+function findProduct(){
+  const upc = $('#recUpc').value.trim();
+  selected = products.find(p => p.upc === upc) || null;
+  $('#found').textContent = !upc ? '' : selected ? `${selected.name} · ${selected.in_stock} in stock` : 'No registered product has this UPC. Register it under Products first.';
+  drawTags();
+}
+function drawTags(){
+  $('#tagCount').textContent = tags.length;
+  const ul = $('#epcList'); ul.replaceChildren();
+  if(!tags.length) ul.append(el('li', 'No tags scanned yet.', 'muted'));
+  tags.forEach(t => {
+    const li = el('li', undefined, 'tagrow'), rm = el('button','Remove','btn alt sm');
+    rm.onclick = () => { tags = tags.filter(x => x !== t); drawTags() };
+    li.append(el('span', t), rm); ul.append(li);
+  });
+  $('#saveRec').disabled = !(selected && tags.length);
+}
+function addTags(list){
+  let added = 0;
+  list.forEach(t => { if(!tags.includes(t)){ tags.push(t); added++ } });
+  drawTags(); return added;
+}
+$('#recUpc').oninput = findProduct;
+$('#findBtn').onclick = findProduct;
+$('#recUpc').onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); findProduct(); $('#manualEpc').focus() } };
+$('#rfidScan').onclick = async e => {
+  e.target.disabled = true; toast('Scanning tags…');
+  const r = await api('/admin/api/scan', 'POST'); e.target.disabled = false;
+  if(!r.ok) return toast(r.error, true);
+  const added = addTags(r.epcs.filter(x => !r.known.includes(x)));
+  toast(`${added} new tag${added===1?'':'s'} added.` + (r.known.length ? ` ${r.known.length} already registered, skipped.` : ''), !added);
+};
+function manualAdd(){
+  const epc = $('#manualEpc').value.trim().toUpperCase();
+  if(!/^[0-9A-F]{24}$/.test(epc)) return toast('An EPC is exactly 24 characters (0-9 and A-F).', true);
+  if(!addTags([epc])) toast('That tag is already in the list.', true);
+  $('#manualEpc').value = '';
+}
+$('#manualAdd').onclick = manualAdd;
+$('#manualEpc').onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); manualAdd() } };
+$('#receiveForm').onsubmit = async e => {
+  e.preventDefault(); $('#recMsg').textContent = '';
+  const r = await api('/admin/api/receive', 'POST', {upc: $('#recUpc').value.trim(), date_received: $('#recDate').value, epcs: tags});
+  if(!r.ok){ $('#recMsg').textContent = r.error; return }
+  toast(r.message); tags = []; $('#recUpc').value = '';
+  products = r.products; renderProducts(); findProduct(); loadInventory();
+};
+
+/* ---------- inventory ---------- */
+async function loadInventory(){
+  const r = await api('/admin/api/inventory'); if(!r.ok) return toast(r.error, true);
+  $('#sTypes').textContent = r.stats.types; $('#sUnits').textContent = r.stats.units; $('#sLow').textContent = r.stats.low;
+  $('#sLow').className = r.stats.low ? 'low' : '';
+  $('#sLowLabel').textContent = `Running low (${r.stats.low_limit} or fewer)`;
+  const inv = $('#invRows'); inv.replaceChildren();
+  if(!r.rows.length) inv.append(emptyRow(4, 'No products yet.'));
+  r.rows.forEach(x => {
+    const tr = el('tr'), low = x.in_stock <= r.stats.low_limit;
+    tr.append(cell(x.name), cell(x.upc), cell(String(x.in_stock), low ? 'low' : ''),
+              cell(x.last_received ? `${x.last_received.date} · ${x.last_received.quantity} units` : 'No reception recorded'));
+    inv.append(tr);
+  });
+  const rec = $('#recRows'); rec.replaceChildren();
+  if(!r.receptions.length) rec.append(emptyRow(4, 'No stock received yet. Use Receive stock to record a delivery.'));
+  r.receptions.forEach(x => { const tr = el('tr'); tr.append(cell(x.date), cell(x.name), cell(x.upc), cell(String(x.quantity))); rec.append(tr) });
+}
+
+drawTags(); loadProducts(); loadInventory();
+</script>
+</body>
+</html>

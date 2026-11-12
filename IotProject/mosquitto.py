@@ -1,8 +1,11 @@
 import json
 import os
 import threading
- 
 import paho.mqtt.client as mqtt
+import time
+from Hardware.fan import fan
+from Hardware.alert_email import send_email, wait_for_reply
+
 
 
 
@@ -26,6 +29,31 @@ file_lock = threading.Lock()
 def _write(data):
     with open(THRESHOLD_FILE, "w") as f:
         json.dump(data, f, indent=4)
+
+
+
+
+def _ask_admin(fridge, temp, turn_on):
+    question = ("Would you like to turn ON the fan? (YES or NO)" if turn_on
+                else "Temperature is back under the limit. Turn OFF the fan? (YES or NO)")
+    try:
+        send_email(fridge, temp, question)
+        if wait_for_reply(fridge):
+            fan.on() if turn_on else fan.off()
+    finally:
+        last_asked[fridge] = time.time()
+        pending.discard(fridge)
+
+
+def _all_under_limit():
+    limits = read_thresholds()
+    for t in TOPICS:
+        temp = sensor_data[t]["temperature"]
+        if temp is not None and temp > limits[t]:
+            return False
+    return True
+
+
  
  
 def read_thresholds():

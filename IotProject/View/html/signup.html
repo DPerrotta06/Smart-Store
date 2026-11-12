@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Add Customer</title>
+    <title>Signup</title>
     <link rel="stylesheet" type="text/css" href="../css/signup.css">
 </head>
 <body>
     <div class="container">
-        <h1>Add Customer</h1>
+        <h1>Signup</h1>
 
         {% if message %}
         <p class="message">{{ message }}</p>
         {% endif %}
 
-        <form action="/add_customer" method="POST">
+        <form action="/signup" method="POST">
             <input type="text" name="first_name" placeholder="First Name"
                    required pattern="[A-Z][a-z]+"
                    title="Only letters, starting with a capital (e.g. John)">
@@ -31,13 +31,19 @@
                    required pattern="(?=.{6,30}@)[a-zA-Z0-9]+(\.[a-z0-9]+)*@gmail\.com"
                    title="Gmail address, 6-30 characters before the @ (e.g. example.ch05@gmail.com)">
 
+            <input type="password" name="password" placeholder="Password (8-30 characters)"
+                    required minlength="8" maxlength="30"
+                    pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{8,30}"
+                    autocomplete="new-password"
+                    title="8-30 characters, with at least one lowercase letter, one uppercase letter and one number">
+
             <input type="text" name="customer_address" placeholder="Address" required>
 
             <button type="submit">Add Customer</button>
         </form>
 
-        <form class="secondary" action="/temperature" method="GET">
-            <button type="submit">Temperature page</button>
+        <form class="secondary" action="/login" method="GET">
+            <button type="submit">Login</button>
         </form>
     </div>
 </body>

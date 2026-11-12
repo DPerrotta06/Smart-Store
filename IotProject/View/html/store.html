@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Store checkout</title>
+<link rel="stylesheet" href="{{ url_for('customer_bp.static', filename='style.css') }}">
+</head>
+<body>
+
+<header class="top">
+  <span class="brand">Smart Store</span>
+  <div class="who">
+    <button class="btn alt sm" id="loginBtn" data-open="loginDlg">Log in</button>
+    <span id="member" hidden><b id="memberName"></b> · <span id="memberPts">0.00</span> points</span>
+    <button class="btn alt sm" id="historyBtn" data-open="historyDlg" hidden>My purchases</button>
+    <button class="btn alt sm" id="logoutBtn" hidden>Log out</button>
+  </div>
+</header>
+
+<main class="wrap grid">
+
+  <section class="panel" aria-labelledby="basketTitle">
+    <div class="row">
+      <h1 id="basketTitle">Your basket</h1>
+      <button class="btn" id="scanBtn">Scan all items</button>
+    </div>
+    <p class="muted">Put your items on the reader, then press scan. Every tag is read at once.</p>
+    {% if config.DEBUG %}
+    <form id="manualForm" class="input-btn" style="margin-bottom:12px">
+      <input name="epc" maxlength="24" placeholder="Testing without the reader: type an EPC" autocomplete="off">
+      <button class="btn alt sm">Add tag</button>
+    </form>
+    {% endif %}
+    <div id="basket"></div>
+  </section>
+
+  <aside class="panel side" aria-labelledby="totalTitle">
+    <div class="tag">
+      <span id="totalTitle">Total</span>
+      <strong id="total">$0.00</strong>
+    </div>
+    <p class="muted">You will earn <b id="earn">0.00</b> points with this purchase.</p>
+    <button class="btn wide" id="payBtn">Pay now</button>
+    <p class="muted" id="payHint">You will be asked for your membership card when you pay.</p>
+  </aside>
+
+</main>
+
+<!-- Log in / create account -->
+<dialog id="loginDlg" aria-labelledby="loginTitle">
+  <form id="loginForm">
+    <h2 id="loginTitle">Log in</h2>
+    <p class="muted">See your points and past purchases.</p>
+    <p class="low" id="loginMsg" style="white-space:pre-line"></p>
+    <label>Email<input type="email" name="email" autocomplete="off" required></label>
+    <label>Password<input type="password" name="password" autocomplete="off" required></label>
+    <div class="actions">
+      <button type="button" class="btn alt" data-close>Cancel</button>
+      <button class="btn">Log in</button>
+    </div>
+    <p class="muted">No account? <a href="#" id="toSignup">Create one</a></p>
+  </form>
+
+  <form id="signupForm" hidden>
+    <h2>Create your account</h2>
+    <p class="low" id="signupMsg" style="white-space:pre-line"></p>
+    <div class="cols">
+      <label>First name<input name="first_name" required></label>
+      <label>Last name<input name="last_name" required></label>
+    </div>
+    <label>Phone<input type="tel" name="tel_number" placeholder="514-555-0123" required></label>
+    <label>Email<input type="email" name="email" autocomplete="off" required></label>
+    <label>Address<input name="customer_address" required></label>
+    <label>Password<input type="password" name="password" autocomplete="new-password" required></label>
+    <div class="actions">
+      <button type="button" class="btn alt" id="toLogin">Back to log in</button>
+      <button class="btn">Create account</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Points and past purchases -->
+<dialog id="historyDlg" aria-labelledby="histTitle">
+  <h2 id="histTitle">My purchases</h2>
+  <p>Membership number <b id="histNo"></b> · <b id="histPts"></b> points</p>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Receipt</th><th>Date</th><th>Total</th><th>Points</th></tr></thead>
+      <tbody id="histRows"></tbody>
+    </table>
+  </div>
+  <div class="actions"><button class="btn" data-close>Close</button></div>
+</dialog>
+
+<!-- Membership card, asked when paying -->
+<dialog id="cardDlg" aria-labelledby="cardTitle">
+  <form id="cardForm">
+    <h2 id="cardTitle">Membership card</h2>
+    <p class="muted">Scan your card or type your membership number to earn points and get your receipt by email.</p>
+    <p class="low" id="cardMsg"></p>
+    <label>Membership number<input id="cardNo" inputmode="numeric" maxlength="11" autocomplete="off"></label>
+    <label id="pointsRow" hidden><span><input type="checkbox" id="usePoints" style="width:auto;min-height:0;margin-right:8px">Use my points (<span id="ptsAvail"></span> available)</span></label>
+    <p class="muted" id="ptsPreview" hidden></p>
+    <div class="actions">
+      <button type="button" class="btn alt" data-close>Back</button>
+      <button type="button" class="btn alt" id="noCardBtn">Pay without card</button>
+      <button class="btn">Pay with card</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Receipt shown after payment -->
+<dialog id="receiptDlg" aria-labelledby="rcpTitle">
+  <h2 id="rcpTitle">Payment complete</h2>
+  <p class="muted">Receipt #<span id="rcpNo"></span> · <span id="rcpDate"></span></p>
+  <table>
+    <thead><tr><th>Item</th><th>Qty</th><th>Price</th></tr></thead>
+    <tbody id="rcpRows"></tbody>
+  </table>
+  <p id="rcpDiscRow" hidden>Points used: <span id="rcpUsed"></span> (−$<span id="rcpDisc"></span>)</p>
+  <p><b>Total paid: <span id="rcpTotal"></span></b><br>Points earned: <span id="rcpPts"></span></p>
+  <p class="muted" id="rcpMail"></p>
+  <div class="actions"><button class="btn" data-close>Done</button></div>
+</dialog>
+
+<div id="toasts" role="status" aria-live="polite"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const URLS = {login: {{ url_for('customer_bp.loginPage')|tojson }}, signup: {{ url_for('customer_bp.signupPage')|tojson }}};
+const IDLE_MS = 120000;           // the next customer must never see the last one's account
+const fmt = n => Number(n).toFixed(2);
+// Kept in page memory only: no cookie, no browser storage. A reload clears it.
+let member = null, token = null, receipts = [], cart = {items: [], total: 0, points: 0}, idleTimer = null;
+
+function toast(msg, err){const t=document.createElement('div');t.className='toast'+(err?' err':'');t.textContent=msg;$('#toasts').append(t);setTimeout(()=>t.remove(),4000)}
+function el(tag, text, cls){const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e}
+function row(cells, colspan){const tr=el('tr');cells.forEach(c=>{const td=el('td',c,colspan?'empty':'');if(colspan)td.colSpan=colspan;tr.append(td)});return tr}
+async function api(url, method='GET', body){
+  try{
+    const res = await fetch(url, {method, headers:{'Content-Type':'application/json'}, body: body && JSON.stringify(body)});
+    return {...(await res.json()), ok: res.ok, status: res.status};
+  }catch{ return {ok:false, status:0, error:'Could not reach the store. Try again.', message:'Could not reach the store. Try again.'} }
+}
+
+document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>document.getElementById(b.dataset.open).showModal());
+document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>b.closest('dialog').close());
+function swap(signup){$('#loginForm').hidden=signup;$('#signupForm').hidden=!signup}
+$('#toSignup').onclick=e=>{e.preventDefault();swap(true)};
+$('#toLogin').onclick=()=>swap(false);
+
+/* ---------- basket ---------- */
+function renderCart(c){
+  cart = c;
+  const box = $('#basket'); box.replaceChildren();
+  if(!c.items.length) box.append(el('p','Nothing scanned yet. Place your items on the reader and press scan.','empty'));
+  c.items.forEach(i=>{
+    const line = el('div',undefined,'line'), name = el('div', i.name);
+    name.append(el('small', `${i.quantity} × $${fmt(i.unit_price)}`));
+    const rm = el('button','Remove','btn danger sm'); rm.setAttribute('aria-label', `Remove ${i.name}`);
+    rm.onclick = async () => { const r = await api(`/api/cart/${i.cart_item_id}`,'DELETE'); if(r.items) renderCart(r); toast(r.ok?`${i.name} removed.`:r.error, !r.ok) };
+    line.append(name, el('strong', `$${fmt(i.line_total)}`), rm); box.append(line);
+  });
+  $('#total').textContent = `$${fmt(c.total)}`;
+  $('#earn').textContent = fmt(c.points);
+}
+function scanResult(r){
+  if(r.items) renderCart(r);
+  if(r.error) return toast(r.error, true);
+  if(r.added?.length) toast(`Added: ${r.added.join(', ')}.`);
+  if(r.unknown?.length) toast(`${r.unknown.length} tag(s) are not in the store catalog.`, true);
+  if(r.sold?.length) toast(`Already sold: ${r.sold.join(', ')}.`, true);
+  if(!r.added?.length && !r.unknown?.length && !r.sold?.length) toast('No new items found. Check that the tags are on the reader.', true);
+}
+$('#scanBtn').onclick = async () => { toast('Scanning…'); scanResult(await api('/api/scan','POST')) };
+if($('#manualForm')) $('#manualForm').onsubmit = async e => {
+  e.preventDefault(); scanResult(await api('/api/manual_scan','POST',{epc:e.target.epc.value})); e.target.reset();
+};
+
+/* ---------- member ---------- */
+function drawMember(){
+  const on = !!member;
+  $('#loginBtn').hidden = on;
+  ['member','historyBtn','logoutBtn'].forEach(id => $('#'+id).hidden = !on);
+  $('#payHint').textContent = on ? 'Your membership number will be filled in when you pay.' : 'You will be asked for your membership card when you pay.';
+  if(!on) return;
+  $('#memberName').textContent = `${member.first_name} ${member.last_name}`;
+  $('#memberPts').textContent = $('#histPts').textContent = fmt(member.points);
+  $('#histNo').textContent = member.card_number;
+  const body = $('#histRows'); body.replaceChildren();
+  if(!receipts.length) body.append(row(['No purchases yet. Your receipts will show up here after you pay.'], 4));
+  receipts.forEach(r => body.append(row([`#${r.receipt_id}`, r.purchased_at, `$${fmt(r.total)}`, `+${fmt(r.points_earned)}`])));
+}
+function resetIdle(){
+  clearTimeout(idleTimer);
+  if(member) idleTimer = setTimeout(() => logout('You were logged out after 2 minutes without activity.'), IDLE_MS);
+}
+function logout(msg){member=token=null;receipts=[];clearTimeout(idleTimer);drawMember();$('#historyDlg').close();toast(msg||'You are logged out.')}
+$('#logoutBtn').onclick = () => logout();
+['pointerdown','keydown'].forEach(ev => addEventListener(ev, resetIdle));
+
+$('#loginForm').onsubmit = async e => {
+  e.preventDefault();
+  const r = await api(URLS.login,'POST',Object.fromEntries(new FormData(e.target)));
+  if(!r.ok){ $('#loginMsg').textContent = r.message; return }
+  e.target.reset(); $('#loginMsg').textContent = '';
+  if(r.admin){ location.href = r.url + '#' + r.token; return }   // admin page reads the token from the address, then removes it
+  $('#loginDlg').close();
+  member = r.customer; token = r.token; receipts = r.receipts; drawMember(); resetIdle();
+  toast(`Welcome, ${member.first_name}.`);
+};
+$('#signupForm').onsubmit = async e => {
+  e.preventDefault();
+  const r = await api(URLS.signup,'POST',Object.fromEntries(new FormData(e.target)));
+  if(!r.ok){ $('#signupMsg').textContent = r.message; return }
+  e.target.reset(); $('#signupMsg').textContent = ''; swap(false); toast(r.message);
+};
+
+/* ---------- pay ---------- */
+function pointsDiscount(){ return Math.min(Math.floor(member.points * 100) / 100, cart.total) }
+function updatePointsRow(){
+  // points can only be spent on your own card, and only when you are logged in
+  const own = member && $('#cardNo').value.trim() === member.card_number && member.points > 0 && cart.total > 0;
+  $('#pointsRow').hidden = !own;
+  if(!own) $('#usePoints').checked = false;
+  if(own) $('#ptsAvail').textContent = fmt(member.points);
+  const on = own && $('#usePoints').checked;
+  $('#ptsPreview').hidden = !on;
+  if(on){ const d = pointsDiscount(); $('#ptsPreview').textContent = `Points discount −$${fmt(d)}. You pay $${fmt(cart.total - d)}.` }
+}
+function openCard(){
+  if(!cart.items.length){ toast('Scan your items first.', true); return }
+  $('#cardMsg').textContent = ''; $('#usePoints').checked = false;
+  $('#cardNo').value = member ? member.card_number : '';
+  updatePointsRow(); $('#cardDlg').showModal(); $('#cardNo').focus();   // a barcode scanner types the number here, then presses Enter
+}
+$('#payBtn').onclick = openCard;
+$('#cardNo').oninput = e => { e.target.value = e.target.value.replace(/\D/g, ''); updatePointsRow() };
+$('#usePoints').onchange = updatePointsRow;
+$('#cardForm').onsubmit = e => {
+  e.preventDefault();
+  const no = $('#cardNo').value.trim();
+  if(!no){ $('#cardMsg').textContent = 'Enter your membership number, or choose Pay without card.'; return }
+  pay(no);
+};
+$('#noCardBtn').onclick = () => pay('');
+
+async function pay(number){
+  const usePoints = !!number && !$('#pointsRow').hidden && $('#usePoints').checked;
+  const r = await api('/api/pay', 'POST', {card_number: number, use_points: usePoints, token});
+  if(!r.ok){
+    if(r.field === 'card_number' || r.field === 'points'){ $('#cardMsg').textContent = r.error; return }   // fixable: stay in the box
+    $('#cardDlg').close(); toast(r.error, true); renderCart(await api('/api/cart')); return;
+  }
+  $('#cardDlg').close();
+  const rc = r.receipt;
+  $('#rcpNo').textContent = rc.receipt_id; $('#rcpDate').textContent = rc.purchased_at;
+  $('#rcpTotal').textContent = `$${fmt(rc.total)}`; $('#rcpPts').textContent = fmt(rc.points_earned);
+  $('#rcpDiscRow').hidden = !rc.discount; $('#rcpUsed').textContent = fmt(rc.points_used); $('#rcpDisc').textContent = fmt(rc.discount);
+  $('#rcpMail').textContent = r.email_status;
+  $('#rcpMail').className = r.email_sent === false ? 'low' : 'muted';
+  if(r.email_sent === false) toast('Receipt not emailed. See the message on your receipt.', true);
+  const body = $('#rcpRows'); body.replaceChildren();
+  rc.lines.forEach(l => body.append(row([l.name, l.quantity, `$${fmt(l.unit_price)}`])));
+  if(member && rc.membership_number === member.membership_number){     // paid with the logged-in member's own card
+    member.points = Number((member.points - rc.points_used + rc.points_earned).toFixed(2)); receipts.unshift(rc); drawMember();
+  }
+  $('#receiptDlg').showModal();
+  renderCart(await api('/api/cart'));
+}
+
+api('/api/cart').then(renderCart);
+</script>
+</body>
+</html>
