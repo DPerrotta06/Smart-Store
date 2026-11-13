@@ -4,7 +4,7 @@ import threading
 import paho.mqtt.client as mqtt
 import time
 from Hardware.fan import fan
-from Hardware.alert_email import send_email, wait_for_reply
+from phase_2.alert_email import send_email, wait_for_reply
 
 
 
