@@ -11,7 +11,7 @@ from Model.receiptModel import Receipt
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 465
 SENDER_EMAIL = "shon.ch05@gmail.com"#os.getenv("SENDER_EMAIL")
-SENDER_PASSWORD =  "mdad mabx gapk tsdo"#os.getenv("SENDER_PASSWORD")
+SENDER_PASSWORD =  ""#os.getenv("SENDER_PASSWORD")
 
 def _build_bodies(customer, receipt, items):
     text = [
