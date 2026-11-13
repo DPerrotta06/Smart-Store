@@ -48,7 +48,7 @@
       </div>
       <p id="found" class="muted"></p>
       <label>Add a tag by hand
-        <div class="input-btn"><input id="manualEpc" maxlength="24" placeholder="24-character EPC" autocomplete="off">
+        <div class="input-btn"><input id="manualEpc" maxlength="22" placeholder="22-character EPC" autocomplete="off">
         <button type="button" class="btn alt" id="manualAdd">Add</button></div></label>
       <p><b>Tags scanned: <span id="tagCount">0</span></b> <span class="muted">(this is the quantity received)</span></p>
       <ul class="epcs" id="epcList"></ul>
@@ -101,8 +101,8 @@
     </div>
     <label>Barcode (UPC, 13 digits max)
       <div class="input-btn"><input name="upc" maxlength="13" inputmode="numeric" autocomplete="off" required><button type="button" class="btn alt" id="upcScan">Scan</button></div></label>
-    <label id="epcLabel">RFID tag (EPC, 24 characters)
-      <div class="input-btn"><input name="epc" maxlength="24" autocomplete="off"><button type="button" class="btn alt" id="epcRead">Read tag</button></div></label>
+    <label id="epcLabel">RFID tag (EPC, 22 characters)
+      <div class="input-btn"><input name="epc" maxlength="22" autocomplete="off"><button type="button" class="btn alt" id="epcRead">Read tag</button></div></label>
     <label>Producer company<input name="producer_company" maxlength="100" required></label>
     <div class="actions">
       <button type="button" class="btn alt" data-close>Cancel</button>
@@ -262,7 +262,7 @@ $('#rfidScan').onclick = async e => {
 };
 function manualAdd(){
   const epc = $('#manualEpc').value.trim().toUpperCase();
-  if(!/^[0-9A-F]{24}$/.test(epc)) return toast('An EPC is exactly 24 characters (0-9 and A-F).', true);
+  if(!/^[0-9A-F]{22}$/.test(epc)) return toast('An EPC is exactly 22 characters (0-9 and A-F).', true);
   if(!addTags([epc])) toast('That tag is already in the list.', true);
   $('#manualEpc').value = '';
 }

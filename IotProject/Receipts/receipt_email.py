@@ -2,16 +2,16 @@ import os
 import smtplib
 from email.message import EmailMessage
 from html import escape
-#from dotenv import load_dotenv
+from dotenv import load_dotenv
 from Database.db import db
 from Model.customerModel import Customer
 from Model.receiptModel import Receipt
 
-#load_dotenv()
+load_dotenv()
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 465
-SENDER_EMAIL = "shon.ch05@gmail.com"#os.getenv("SENDER_EMAIL")
-SENDER_PASSWORD =  ""#os.getenv("SENDER_PASSWORD")
+SENDER_EMAIL =os.getenv("SENDER_EMAIL") # "shon.ch05@gmail.com"#os.getenv("SENDER_EMAIL")
+SENDER_PASSWORD = os.getenv("SENDER_PASSWORD") #"mdad mabx gapk tsdo"
 
 def _build_bodies(customer, receipt, items):
     text = [

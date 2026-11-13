@@ -18,7 +18,7 @@ INVENTORY_COMMAND = bytes.fromhex("0008220000000022")  # "read all tags in range
 SCAN_SECONDS = 2.0
 POLL_INTERVAL = 0.1
 
-EPC_LENGTH = 24  # hex characters in a store tag's EPC (matches the 24-character limit in the spec)
+EPC_LENGTH = 22  # hex characters in a store tag's EPC (the reader appends 2 more characters after it, which change on every read)
 
 # A tag frame starts with A0 or E0 followed by the EPC
 EPC_PATTERN = re.compile(rf"(?:A0|E0)([A-F0-9]{{{EPC_LENGTH}}})")
@@ -49,9 +49,18 @@ def read_raw_hex(seconds=SCAN_SECONDS):
 
 
 def extract_epcs(raw_hex):
-    """Pull the store's EPCs out of the raw hex stream (no duplicates)."""
-    found = set(EPC_PATTERN.findall(raw_hex))
-    return sorted(epc for epc in found if epc.startswith(STORE_EPC_PREFIX))
+    """Pull the store's EPCs out of the raw hex stream (no duplicates).
+
+    The stream is hex text, two characters per byte. Searching it as plain text can match across a
+    byte boundary (the end of one byte plus the start of the next can spell "A0"), which produced
+    phantom EPCs. So only positions that start on a byte boundary (even index) are accepted."""
+    found = set()
+    for i in range(0, len(raw_hex) - 2 - EPC_LENGTH + 1, 2):
+        if raw_hex[i:i + 2] in ("A0", "E0"):
+            epc = raw_hex[i + 2:i + 2 + EPC_LENGTH]
+            if EPC_PATTERN.fullmatch(raw_hex[i:i + 2 + EPC_LENGTH]) and epc.startswith(STORE_EPC_PREFIX):
+                found.add(epc)
+    return sorted(found)
 
 
 def scan_tags():

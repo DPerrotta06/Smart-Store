@@ -1,5 +1,5 @@
 import re
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, jsonify, render_template, request, current_app
@@ -14,7 +14,7 @@ from GeneralFunction.adminAuth import requireAdmin
 admin_bp = Blueprint("admin_bp", __name__, template_folder="../View/html")  # CSS comes from customer_bp.static
 
 UPC_RE = re.compile(r"\d{1,13}")
-EPC_RE = re.compile(r"[0-9A-F]{24}")
+EPC_RE = re.compile(r"[0-9A-F]{22}")
 LOW_STOCK = 3   # a product type with this many units or fewer counts as "running low"
 
 
@@ -82,7 +82,7 @@ def list_products():
 @admin_bp.route("/admin/api/products", methods=["POST"])
 @requireAdmin
 def add_product():
-    """Register a new product type together with its first unit (one UPC, one EPC)."""
+    """Register a new product type together with its first unit (one UPC, one EPC) and record it as a reception of 1."""
     data = request.get_json(silent=True) or {}
     fields, problem = read_type_fields(data)
     if problem:
@@ -91,7 +91,7 @@ def add_product():
     if not UPC_RE.fullmatch(upc):
         return error("The UPC must be 1 to 13 digits.")
     if not EPC_RE.fullmatch(epc):
-        return error("The EPC must be exactly 24 characters (0-9 and A-F).")
+        return error("The EPC must be exactly 22 characters (0-9 and A-F).")
     if live_units(upc).first():
         return error("This UPC is already registered. Use Receive stock to add more units.", 409)
     if Product.query.filter_by(epc=epc).first():
@@ -99,6 +99,12 @@ def add_product():
 
     unit = Product(upc=upc, epc=epc, sold=False, active=True, **fields)
     db.session.add(unit)
+    db.session.flush()
+    # the first unit counts as a delivery of 1, so every unit has a reception
+    reception = StockReception(stock_quantity=1, date_received=date.today().isoformat(), product_id=unit.product_id)
+    db.session.add(reception)
+    db.session.flush()
+    unit.reception_id = reception.reception_id
     db.session.commit()
     return jsonify(message=f"{fields['name']} added.", products=type_rows()), 201
 
@@ -173,7 +179,7 @@ def receive_stock():
         return error("The same tag appears twice in the list.")
     bad = [e for e in epcs if not EPC_RE.fullmatch(e)]
     if bad:
-        return error(f"{len(bad)} tag(s) are not valid 24-character EPCs.")
+        return error(f"{len(bad)} tag(s) are not valid 22-character EPCs.")
     taken = [p.epc for p in Product.query.filter(Product.epc.in_(epcs))]
     if taken:
         return error(f"{len(taken)} tag(s) are already registered, for example {taken[0]}.", 409)
