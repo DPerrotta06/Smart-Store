@@ -69,3 +69,6 @@ details .epcs{margin:8px 0 0;max-height:120px}
 .tagrow{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .sold{color:var(--mute);text-decoration:line-through}
 .stack{display:grid;gap:20px}
+
+/* quantity of a grouped basket line */
+.qty{display:inline-block;background:var(--tag);color:#2b2300;border-radius:999px;padding:0 10px;margin-left:4px;font-size:.95rem}

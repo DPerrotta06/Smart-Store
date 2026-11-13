@@ -115,7 +115,7 @@
   <h2 id="rcpTitle">Payment complete</h2>
   <p class="muted">Receipt #<span id="rcpNo"></span> · <span id="rcpDate"></span></p>
   <table>
-    <thead><tr><th>Item</th><th>Qty</th><th>Price</th></tr></thead>
+    <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
     <tbody id="rcpRows"></tbody>
   </table>
   <p id="rcpDiscRow" hidden>Points used: <span id="rcpUsed"></span> (−$<span id="rcpDisc"></span>)</p>
@@ -156,10 +156,10 @@ function renderCart(c){
   const box = $('#basket'); box.replaceChildren();
   if(!c.items.length) box.append(el('p','Nothing scanned yet. Place your items on the reader and press scan.','empty'));
   c.items.forEach(i=>{
-    const line = el('div',undefined,'line'), name = el('div', i.name);
-    name.append(el('small', `${i.quantity} × $${fmt(i.unit_price)}`));
-    const rm = el('button','Remove','btn danger sm'); rm.setAttribute('aria-label', `Remove ${i.name}`);
-    rm.onclick = async () => { const r = await api(`/api/cart/${i.cart_item_id}`,'DELETE'); if(r.items) renderCart(r); toast(r.ok?`${i.name} removed.`:r.error, !r.ok) };
+    const line = el('div',undefined,'line'), name = el('div', i.name + ' ');
+    name.append(el('b', `×${i.quantity}`, 'qty'), el('small', `$${fmt(i.unit_price)} each`));
+    const rm = el('button', i.quantity > 1 ? 'Remove 1' : 'Remove', 'btn danger sm'); rm.setAttribute('aria-label', `Remove one ${i.name}`);
+    rm.onclick = async () => { const r = await api(`/api/cart/${i.cart_item_id}`,'DELETE'); if(r.items) renderCart(r); toast(r.ok?`One ${i.name} removed.`:r.error, !r.ok) };
     line.append(name, el('strong', `$${fmt(i.line_total)}`), rm); box.append(line);
   });
   $('#total').textContent = `$${fmt(c.total)}`;
@@ -262,7 +262,7 @@ async function pay(number){
   $('#rcpMail').className = r.email_sent === false ? 'low' : 'muted';
   if(r.email_sent === false) toast('Receipt not emailed. See the message on your receipt.', true);
   const body = $('#rcpRows'); body.replaceChildren();
-  rc.lines.forEach(l => body.append(row([l.name, l.quantity, `$${fmt(l.unit_price)}`])));
+  rc.lines.forEach(l => body.append(row([l.name, `×${l.quantity}`, `$${fmt(l.unit_price)}`, `$${fmt(l.line_total)}`])));
   if(member && rc.membership_number === member.membership_number){     // paid with the logged-in member's own card
     member.points = Number((member.points - rc.points_used + rc.points_earned).toFixed(2)); receipts.unshift(rc); drawMember();
   }

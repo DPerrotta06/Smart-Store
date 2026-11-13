@@ -56,14 +56,27 @@ def get_active_cart():
     return cart
 
 
+def group_items(cart_items):
+    """Group the scanned units into one line per product. Every tag is still its own row in the
+    database (so each unit can be marked sold), but two cans with the same UPC and price show as
+    one line with quantity 2. Order follows the first time each product was scanned."""
+    groups = {}
+    for item in cart_items:
+        key = (item.product.upc, cents(item.unit_price))
+        groups.setdefault(key, []).append(item)
+    return [{"name": units[0].product.name, "unit_price": key[1], "units": units}
+            for key, units in groups.items()]
+
+
 def cart_payload(cart):
     items, total = [], Decimal("0")
-    for item in cart.items:
-        line_total = cents(item.unit_price) * item.item_quantity
+    for group in group_items(cart.items):
+        quantity = sum(u.item_quantity for u in group["units"])
+        line_total = group["unit_price"] * quantity
         total += line_total
-        items.append({"cart_item_id": item.cart_item_id, "name": item.product.name,
-                      "unit_price": float(cents(item.unit_price)), "quantity": item.item_quantity,
-                      "line_total": float(line_total)})
+        items.append({"cart_item_id": group["units"][-1].cart_item_id,   # "Remove 1" takes out the latest unit
+                      "name": group["name"], "unit_price": float(group["unit_price"]),
+                      "quantity": quantity, "line_total": float(line_total)})
     return {"cart_id": cart.cart_id, "items": items, "total": float(cents(total)),
             "points": float(cents(total * POINTS_RATE))}
 
@@ -197,11 +210,13 @@ def process_payment():
                       membership_number=number)
     db.session.add(receipt)
     db.session.flush()
-    for item in cart.items:
-        db.session.add(ReceiptLine(receipt_id=receipt.receipt_id, name=item.product.name,
-                                   quantity=item.item_quantity, unit_price=cents(item.unit_price)))
-        item.receipt_id = receipt.receipt_id
-        item.product.sold = True   # this exact unit can never be bought again
+    for group in group_items(cart.items):
+        db.session.add(ReceiptLine(receipt_id=receipt.receipt_id, name=group["name"],
+                                   quantity=sum(u.item_quantity for u in group["units"]),
+                                   unit_price=group["unit_price"]))
+        for unit in group["units"]:
+            unit.receipt_id = receipt.receipt_id
+            unit.product.sold = True   # this exact unit can never be bought again
     if customer:
         customer.points = float(cents(Decimal(str(customer.points or 0)) - points_used + earned))
     cart.membership_number = number
@@ -233,6 +248,7 @@ def process_payment():
                     "subtotal": float(subtotal), "discount": float(receipt.discount),
                     "points_used": float(receipt.points_used),
                     "total": float(receipt.total), "points_earned": float(receipt.points_earned),
-                    "lines": [{"name": l.name, "quantity": l.quantity, "unit_price": float(l.unit_price)}
+                    "lines": [{"name": l.name, "quantity": l.quantity, "unit_price": float(l.unit_price),
+                               "line_total": float(l.unit_price * l.quantity)}
                               for l in receipt.lines]},
     })
