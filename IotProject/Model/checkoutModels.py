@@ -10,6 +10,13 @@ from sqlalchemy import func
 from Database.db import db
 
 
+class StockReception(db.Model):
+    __tablename__ = "Stock_Reception"
+    reception_id = db.Column(db.Integer, primary_key=True)
+    stock_quantity = db.Column(db.Integer, nullable=False)
+    date_received = db.Column(db.String, nullable=False, server_default=func.current_date())
+    product_id = db.Column(db.Integer, db.ForeignKey("Product.product_id"), nullable=False)
+
 class Product(db.Model):
     __tablename__ = "Product"
     product_id = db.Column(db.Integer, primary_key=True)
@@ -19,6 +26,9 @@ class Product(db.Model):
     producer_company = db.Column(db.String)
     upc = db.Column(db.String)
     name = db.Column(db.String, nullable=False)
+    sold = db.Column(db.Boolean, nullable=False, default=False)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+    reception_id = db.Column(db.Integer, db.ForeignKey("Stock_Reception.reception_id"), nullable=True)
 
 class Cart(db.Model):
     __tablename__ = "Cart"

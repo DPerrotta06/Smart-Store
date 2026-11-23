@@ -1,0 +1,346 @@
+:root {
+    --bg: #eaf1f5;
+    --surface: #ffffff;
+    --ink: #14232e;
+    --muted: #5d7080;
+    --line: #d5e0e8;
+    --accent: #1d7fa3;
+    --humid: #4f7cc2;
+    --danger: #c8402f;
+    --danger-soft: #fbe6e2;
+    --ok: #2f8f5b;
+    --ok-soft: #e0f2e8;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    line-height: 1.4;
+}
+
+.page {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 32px 16px 48px;
+}
+
+/* header */
+
+.top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+h1 {
+    margin: 0;
+    font-size: 1.6rem;
+}
+
+.top-right {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+}
+
+/* fan */
+
+.fan {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+}
+
+.fan-icon {
+    width: 36px;
+    height: 36px;
+    color: var(--muted);
+}
+
+.fan-icon .hub {
+    fill: var(--surface);
+}
+
+.fan.on .fan-icon {
+    color: var(--accent);
+}
+
+.fan-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 40px;
+}
+
+.fan-title {
+    font-size: 0.8rem;
+    color: var(--muted);
+}
+
+.fan-status {
+    font-weight: 700;
+}
+
+.fan.on .fan-status {
+    color: var(--ok);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .fan.on .fan-icon {
+        animation: spin 0.8s linear infinite;
+    }
+
+    .gauge .fill {
+        transition: stroke-dashoffset 0.6s ease;
+    }
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* alert banner */
+
+.banner {
+    margin-bottom: 16px;
+    padding: 12px 16px;
+    background: var(--danger-soft);
+    border-left: 5px solid var(--danger);
+    border-radius: 6px;
+}
+
+.banner p {
+    margin: 4px 0;
+}
+
+/* fridge cards */
+
+.fridges {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
+}
+
+.card {
+    padding: 20px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+}
+
+.card.alert {
+    border-color: var(--danger);
+}
+
+.card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.card-head h2 {
+    margin: 0;
+    font-size: 1.15rem;
+}
+
+.status {
+    padding: 3px 10px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--muted);
+    background: var(--bg);
+    border-radius: 999px;
+}
+
+.status.bad {
+    color: var(--danger);
+    background: var(--danger-soft);
+}
+
+.status.good {
+    color: var(--ok);
+    background: var(--ok-soft);
+}
+
+/* gauges */
+
+.gauges {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.gauge svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.gauge .track {
+    fill: none;
+    stroke: var(--line);
+    stroke-width: 12;
+    stroke-linecap: round;
+}
+
+.gauge .fill {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 12;
+    stroke-linecap: round;
+}
+
+.gauge.humidity .fill {
+    stroke: var(--humid);
+}
+
+.card.alert .gauge.temp .fill {
+    stroke: var(--danger);
+}
+
+.gauge .limit {
+    stroke: var(--ink);
+    stroke-width: 2.5;
+}
+
+.gauge .value {
+    font-size: 26px;
+    font-weight: 700;
+    text-anchor: middle;
+    fill: var(--ink);
+}
+
+.gauge .end {
+    font-size: 9px;
+    text-anchor: middle;
+    fill: var(--muted);
+}
+
+.gauge-label {
+    margin: 0;
+    text-align: center;
+    font-size: 0.9rem;
+    color: var(--muted);
+}
+
+/* threshold form */
+
+.threshold {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+}
+
+.threshold label {
+    color: var(--muted);
+}
+
+.threshold input {
+    width: 80px;
+    padding: 6px 8px;
+    font-size: 1rem;
+    border: 1px solid #b5c4cf;
+    border-radius: 6px;
+}
+
+.note {
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+/* buttons */
+
+button {
+    padding: 7px 14px;
+    font-size: 0.95rem;
+    color: #fff;
+    background: var(--accent);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #17667f;
+}
+
+button.ghost {
+    color: var(--ink);
+    background: transparent;
+    border: 1px solid var(--line);
+}
+
+button.ghost:hover {
+    background: var(--surface);
+}
+
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+/* icons */
+
+.title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.fridge-icon {
+    width: 22px;
+    height: 26px;
+    color: var(--muted);
+}
+
+.card.live .fridge-icon {
+    color: var(--accent);
+}
+
+.card.alert .fridge-icon {
+    color: var(--danger);
+}
+
+.gauge .th-body,
+.gauge .drop-body {
+    fill: var(--surface);
+    stroke: #9fb2bf;
+    stroke-width: 1.5;
+}
+
+.gauge .merc {
+    fill: var(--accent);
+}
+
+.gauge .drop-fill {
+    fill: var(--humid);
+}
+
+.card.alert .gauge.temp .merc {
+    fill: var(--danger);
+}
+
+.gauge.empty .merc,
+.gauge.empty .drop-fill {
+    fill: var(--line);
+}
