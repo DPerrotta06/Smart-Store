@@ -2,16 +2,16 @@ import os
 import smtplib
 from email.message import EmailMessage
 from html import escape
-from dotenv import load_dotenv
+#from dotenv import load_dotenv
 from Database.db import db
 from Model.customerModel import Customer
 from Model.receiptModel import Receipt
 
-load_dotenv()
+#load_dotenv()
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 465
-SENDER_EMAIL =os.getenv("SENDER_EMAIL") # "shon.ch05@gmail.com"#os.getenv("SENDER_EMAIL")
-SENDER_PASSWORD = os.getenv("SENDER_PASSWORD") #"mdad mabx gapk tsdo"
+SENDER_EMAIL = "shon.ch05@gmail.com"#os.getenv("SENDER_EMAIL")
+SENDER_PASSWORD =  ""#os.getenv("SENDER_PASSWORD")
 
 def _build_bodies(customer, receipt, items):
     text = [
@@ -28,8 +28,14 @@ def _build_bodies(customer, receipt, items):
     points_used = getattr(receipt, "points_used", 0) or 0
     used_text = [f"Points used: {points_used:.2f} (-${discount:.2f})"] if discount else []
     used_html = f"Points used: {points_used:.2f} (-${discount:.2f})<br>" if discount else ""
+    subtotal = getattr(receipt, "subtotal", 0) or 0
+    gst = getattr(receipt, "gst", 0) or 0
+    qst = getattr(receipt, "qst", 0) or 0
+    tax_text = [f"Subtotal: ${subtotal:.2f}", f"GST (5%): ${gst:.2f}", f"QST (9.975%): ${qst:.2f}"] if subtotal else []
+    tax_html = (f"Subtotal: ${subtotal:.2f}<br>GST (5%): ${gst:.2f}<br>QST (9.975%): ${qst:.2f}<br>") if subtotal else ""
     text += [
-        "", 
+        "",
+        *tax_text,
         *used_text,
         f"Total: ${receipt.total:.2f}", 
         f"Points Earned: {receipt.points_earned:.2f}", 
@@ -41,7 +47,7 @@ def _build_bodies(customer, receipt, items):
     <table cellpadding="6" cellspacing="0" border="1" style="border-collapse:collapse">
       <tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr>{table_rows}
     </table>
-    <p>{used_html}<b>Total: ${receipt.total:.2f}</b><br>
+    <p>{tax_html}{used_html}<b>Total: ${receipt.total:.2f}</b><br>
     Points earned: {receipt.points_earned}<br>
     Total points: {customer.points}</p>"""
     return "\n".join(text), html

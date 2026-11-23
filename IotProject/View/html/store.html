@@ -40,18 +40,25 @@
       <span id="totalTitle">Total</span>
       <strong id="total">$0.00</strong>
     </div>
+    <p class="muted" id="taxLine">Subtotal $0.00 · GST $0.00 · QST $0.00</p>
     <p class="muted">You will earn <b id="earn">0.00</b> points with this purchase.</p>
-    <button class="btn wide" id="payBtn">Pay now</button>
-    <p class="muted" id="payHint">You will be asked for your membership card when you pay.</p>
+    <button class="btn wide" id="payBtn" disabled>Pay now</button>
+    <p class="muted" id="payHint">Log in to pay. Only members can pay.</p>
   </aside>
 
 </main>
 
 <!-- Log in / create account -->
 <dialog id="loginDlg" aria-labelledby="loginTitle">
+  <div id="loginPane">
+  <h2 id="loginTitle">Log in</h2>
+  <form id="cardLoginForm">
+    <label>Scan your membership card
+      <input id="cardLoginNo" inputmode="numeric" maxlength="11" placeholder="Scan the card, or type the 11 digits" autocomplete="off"></label>
+    <p class="low" id="cardLoginMsg"></p>
+  </form>
+  <p class="muted" style="text-align:center">or log in with your email</p>
   <form id="loginForm">
-    <h2 id="loginTitle">Log in</h2>
-    <p class="muted">See your points and past purchases.</p>
     <p class="low" id="loginMsg" style="white-space:pre-line"></p>
     <label>Email<input type="email" name="email" autocomplete="off" required></label>
     <label>Password<input type="password" name="password" autocomplete="off" required></label>
@@ -61,6 +68,7 @@
     </div>
     <p class="muted">No account? <a href="#" id="toSignup">Create one</a></p>
   </form>
+  </div>
 
   <form id="signupForm" hidden>
     <h2>Create your account</h2>
@@ -93,19 +101,22 @@
   <div class="actions"><button class="btn" data-close>Close</button></div>
 </dialog>
 
-<!-- Membership card, asked when paying -->
+<!-- Review and pay (members only) -->
 <dialog id="cardDlg" aria-labelledby="cardTitle">
   <form id="cardForm">
-    <h2 id="cardTitle">Membership card</h2>
-    <p class="muted">Scan your card or type your membership number to earn points and get your receipt by email.</p>
+    <h2 id="cardTitle">Review and pay</h2>
     <p class="low" id="cardMsg"></p>
-    <label>Membership number<input id="cardNo" inputmode="numeric" maxlength="11" autocomplete="off"></label>
+    <table>
+      <tr><td>Subtotal</td><td id="pSub"></td></tr>
+      <tr><td>GST (5%)</td><td id="pGst"></td></tr>
+      <tr><td>QST (9.975%)</td><td id="pQst"></td></tr>
+      <tr id="pDiscRow" hidden><td>Points discount</td><td id="pDisc"></td></tr>
+      <tr><td><b>Total to pay</b></td><td><b id="pTotal"></b></td></tr>
+    </table>
     <label id="pointsRow" hidden><span><input type="checkbox" id="usePoints" style="width:auto;min-height:0;margin-right:8px">Use my points (<span id="ptsAvail"></span> available)</span></label>
-    <p class="muted" id="ptsPreview" hidden></p>
     <div class="actions">
       <button type="button" class="btn alt" data-close>Back</button>
-      <button type="button" class="btn alt" id="noCardBtn">Pay without card</button>
-      <button class="btn">Pay with card</button>
+      <button class="btn">Pay</button>
     </div>
   </form>
 </dialog>
@@ -118,8 +129,9 @@
     <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
     <tbody id="rcpRows"></tbody>
   </table>
+  <p class="muted">Subtotal $<span id="rcpSub"></span> · GST $<span id="rcpGst"></span> · QST $<span id="rcpQst"></span></p>
   <p id="rcpDiscRow" hidden>Points used: <span id="rcpUsed"></span> (−$<span id="rcpDisc"></span>)</p>
-  <p><b>Total paid: <span id="rcpTotal"></span></b><br>Points earned: <span id="rcpPts"></span></p>
+  <p><b>Total paid (taxes included): <span id="rcpTotal"></span></b><br>Points earned: <span id="rcpPts"></span></p>
   <p class="muted" id="rcpMail"></p>
   <div class="actions"><button class="btn" data-close>Done</button></div>
 </dialog>
@@ -144,9 +156,9 @@ async function api(url, method='GET', body){
   }catch{ return {ok:false, status:0, error:'Could not reach the store. Try again.', message:'Could not reach the store. Try again.'} }
 }
 
-document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>document.getElementById(b.dataset.open).showModal());
+document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>{document.getElementById(b.dataset.open).showModal(); if(b.dataset.open==='loginDlg'){swap(false)}});
 document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>b.closest('dialog').close());
-function swap(signup){$('#loginForm').hidden=signup;$('#signupForm').hidden=!signup}
+function swap(signup){$('#loginPane').hidden=signup;$('#signupForm').hidden=!signup; if(!signup) $('#cardLoginNo').focus()}
 $('#toSignup').onclick=e=>{e.preventDefault();swap(true)};
 $('#toLogin').onclick=()=>swap(false);
 
@@ -164,6 +176,12 @@ function renderCart(c){
   });
   $('#total').textContent = `$${fmt(c.total)}`;
   $('#earn').textContent = fmt(c.points);
+  $('#taxLine').textContent = `Subtotal $${fmt(c.subtotal)} · GST $${fmt(c.gst)} · QST $${fmt(c.qst)}`;
+  syncPay();
+}
+function syncPay(){   // guests cannot pay: the button stays off until a member is logged in
+  $('#payBtn').disabled = !member || !cart.items.length;
+  $('#payHint').textContent = !member ? 'Log in to pay. Only members can pay.' : !cart.items.length ? 'Scan your items to pay.' : 'Taxes (GST and QST) are included in the total.';
 }
 function scanResult(r){
   if(r.items) renderCart(r);
@@ -183,7 +201,7 @@ function drawMember(){
   const on = !!member;
   $('#loginBtn').hidden = on;
   ['member','historyBtn','logoutBtn'].forEach(id => $('#'+id).hidden = !on);
-  $('#payHint').textContent = on ? 'Your membership number will be filled in when you pay.' : 'You will be asked for your membership card when you pay.';
+  syncPay();
   if(!on) return;
   $('#memberName').textContent = `${member.first_name} ${member.last_name}`;
   $('#memberPts').textContent = $('#histPts').textContent = fmt(member.points);
@@ -206,10 +224,24 @@ $('#loginForm').onsubmit = async e => {
   if(!r.ok){ $('#loginMsg').textContent = r.message; return }
   e.target.reset(); $('#loginMsg').textContent = '';
   if(r.admin){ location.href = r.url + '#' + r.token; return }   // admin page reads the token from the address, then removes it
-  $('#loginDlg').close();
-  member = r.customer; token = r.token; receipts = r.receipts; drawMember(); resetIdle();
-  toast(`Welcome, ${member.first_name}.`);
+  startSession(r);
 };
+function startSession(r){
+  $('#loginDlg').close();
+  member = r.customer; token = r.token; receipts = r.receipts; drawMember(); resetIdle(); syncPay();
+  toast(`Welcome, ${member.first_name}.`);
+}
+/* log in by scanning the membership card: a barcode scanner types the 11 digits (then Enter) */
+async function cardLogin(){
+  const no = $('#cardLoginNo').value.trim();
+  if(no.length !== 11){ $('#cardLoginMsg').textContent = 'The membership number has 11 digits.'; return }
+  const r = await api('/login/card', 'POST', {card_number: no});
+  $('#cardLoginNo').value = '';
+  if(!r.ok){ $('#cardLoginMsg').textContent = r.message; return }
+  $('#cardLoginMsg').textContent = ''; startSession(r);
+}
+$('#cardLoginNo').oninput = e => { e.target.value = e.target.value.replace(/\D/g, ''); $('#cardLoginMsg').textContent = ''; if(e.target.value.length === 11) cardLogin() };
+$('#cardLoginForm').onsubmit = e => { e.preventDefault(); cardLogin() };
 $('#signupForm').onsubmit = async e => {
   e.preventDefault();
   const r = await api(URLS.signup,'POST',Object.fromEntries(new FormData(e.target)));
@@ -219,43 +251,38 @@ $('#signupForm').onsubmit = async e => {
 
 /* ---------- pay ---------- */
 function pointsDiscount(){ return Math.min(Math.floor(member.points * 100) / 100, cart.total) }
-function updatePointsRow(){
-  // points can only be spent on your own card, and only when you are logged in
-  const own = member && $('#cardNo').value.trim() === member.card_number && member.points > 0 && cart.total > 0;
-  $('#pointsRow').hidden = !own;
-  if(!own) $('#usePoints').checked = false;
-  if(own) $('#ptsAvail').textContent = fmt(member.points);
-  const on = own && $('#usePoints').checked;
-  $('#ptsPreview').hidden = !on;
-  if(on){ const d = pointsDiscount(); $('#ptsPreview').textContent = `Points discount −$${fmt(d)}. You pay $${fmt(cart.total - d)}.` }
+function updatePayDialog(){
+  const canUse = member && member.points > 0 && cart.total > 0;
+  $('#pointsRow').hidden = !canUse;
+  if(!canUse) $('#usePoints').checked = false;
+  if(canUse) $('#ptsAvail').textContent = fmt(member.points);
+  const d = canUse && $('#usePoints').checked ? pointsDiscount() : 0;
+  $('#pSub').textContent = `$${fmt(cart.subtotal)}`; $('#pGst').textContent = `$${fmt(cart.gst)}`; $('#pQst').textContent = `$${fmt(cart.qst)}`;
+  $('#pDiscRow').hidden = !d; $('#pDisc').textContent = `−$${fmt(d)}`;
+  $('#pTotal').textContent = `$${fmt(cart.total - d)}`;
 }
-function openCard(){
+function openPay(){
+  if(!member){ toast('Log in to pay. Only members can pay.', true); return }
   if(!cart.items.length){ toast('Scan your items first.', true); return }
   $('#cardMsg').textContent = ''; $('#usePoints').checked = false;
-  $('#cardNo').value = member ? member.card_number : '';
-  updatePointsRow(); $('#cardDlg').showModal(); $('#cardNo').focus();   // a barcode scanner types the number here, then presses Enter
+  updatePayDialog(); $('#cardDlg').showModal();
 }
-$('#payBtn').onclick = openCard;
-$('#cardNo').oninput = e => { e.target.value = e.target.value.replace(/\D/g, ''); updatePointsRow() };
-$('#usePoints').onchange = updatePointsRow;
-$('#cardForm').onsubmit = e => {
-  e.preventDefault();
-  const no = $('#cardNo').value.trim();
-  if(!no){ $('#cardMsg').textContent = 'Enter your membership number, or choose Pay without card.'; return }
-  pay(no);
-};
-$('#noCardBtn').onclick = () => pay('');
+$('#payBtn').onclick = openPay;
+$('#usePoints').onchange = updatePayDialog;
+$('#cardForm').onsubmit = e => { e.preventDefault(); pay() };
 
-async function pay(number){
-  const usePoints = !!number && !$('#pointsRow').hidden && $('#usePoints').checked;
-  const r = await api('/api/pay', 'POST', {card_number: number, use_points: usePoints, token});
+async function pay(){
+  const usePoints = !$('#pointsRow').hidden && $('#usePoints').checked;
+  const r = await api('/api/pay', 'POST', {use_points: usePoints, token});
   if(!r.ok){
-    if(r.field === 'card_number' || r.field === 'points'){ $('#cardMsg').textContent = r.error; return }   // fixable: stay in the box
+    if(r.status === 401){ $('#cardDlg').close(); logout('Log in again to pay.'); return }
+    if(r.field === 'points'){ $('#cardMsg').textContent = r.error; return }   // fixable: stay in the box
     $('#cardDlg').close(); toast(r.error, true); renderCart(await api('/api/cart')); return;
   }
   $('#cardDlg').close();
   const rc = r.receipt;
   $('#rcpNo').textContent = rc.receipt_id; $('#rcpDate').textContent = rc.purchased_at;
+  $('#rcpSub').textContent = fmt(rc.subtotal); $('#rcpGst').textContent = fmt(rc.gst); $('#rcpQst').textContent = fmt(rc.qst);
   $('#rcpTotal').textContent = `$${fmt(rc.total)}`; $('#rcpPts').textContent = fmt(rc.points_earned);
   $('#rcpDiscRow').hidden = !rc.discount; $('#rcpUsed').textContent = fmt(rc.points_used); $('#rcpDisc').textContent = fmt(rc.discount);
   $('#rcpMail').textContent = r.email_status;
@@ -263,7 +290,7 @@ async function pay(number){
   if(r.email_sent === false) toast('Receipt not emailed. See the message on your receipt.', true);
   const body = $('#rcpRows'); body.replaceChildren();
   rc.lines.forEach(l => body.append(row([l.name, `×${l.quantity}`, `$${fmt(l.unit_price)}`, `$${fmt(l.line_total)}`])));
-  if(member && rc.membership_number === member.membership_number){     // paid with the logged-in member's own card
+  if(member && rc.membership_number === member.membership_number){
     member.points = Number((member.points - rc.points_used + rc.points_earned).toFixed(2)); receipts.unshift(rc); drawMember();
   }
   $('#receiptDlg').showModal();

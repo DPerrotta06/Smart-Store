@@ -3,7 +3,7 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, jsonify, render_template, request, current_app
-from sqlalchemy import func
+from sqlalchemy import case, func, or_
 
 from Database.db import db
 from Model.checkoutModels import Product, StockReception, CartItem  # swap to the merged models later
@@ -155,6 +155,28 @@ def scan_tags():
         return error("The reader is not responding. Check the cable and try again.", 500)
     known = {p.epc for p in Product.query.filter(Product.epc.in_(epcs))} if epcs else set()
     return jsonify(epcs=epcs, known=sorted(known))
+
+
+@admin_bp.route("/admin/api/product_search", methods=["GET"])
+@requireAdmin
+def product_search():
+    """Search product types by name, category or UPC for the Receive stock drop-down.
+    Only the first 20 matches are sent, so it stays fast with thousands of products."""
+    q = (request.args.get("q") or "").strip()[:100]
+    limit = 20
+    in_stock = func.sum(case((Product.sold == False, 1), else_=0))   # noqa: E712
+    query = (db.session.query(Product.upc, func.min(Product.name), func.min(Product.category), in_stock)
+             .filter(Product.active == True))                        # noqa: E712
+    if q:
+        safe = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        like = f"%{safe}%"
+        query = query.filter(or_(Product.name.ilike(like, escape="\\"),
+                                 Product.category.ilike(like, escape="\\"),
+                                 Product.upc.like(like, escape="\\")))
+    rows = query.group_by(Product.upc).order_by(func.min(Product.name), Product.upc).limit(limit + 1).all()
+    return jsonify(products=[{"upc": r[0], "name": r[1], "category": r[2], "in_stock": int(r[3] or 0)}
+                             for r in rows[:limit]],
+                   more=len(rows) > limit)
 
 
 @admin_bp.route("/admin/api/receive", methods=["POST"])

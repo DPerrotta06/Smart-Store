@@ -6,10 +6,13 @@ from sqlalchemy.exc import IntegrityError
 class Receipt(db.Model):
     __tablename__ = "Receipt"
     receipt_id = db.Column(db.Integer, primary_key=True)
-    total = db.Column(db.Numeric(10, 2), nullable=False)
+    subtotal = db.Column(db.Numeric(10, 2), nullable=False, default=0)      # price before tax
+    gst = db.Column(db.Numeric(10, 2), nullable=False, default=0)           # 5% federal
+    qst = db.Column(db.Numeric(10, 2), nullable=False, default=0)           # 9.975% Quebec
+    total = db.Column(db.Numeric(10, 2), nullable=False)                    # what was paid: subtotal + taxes - points discount
     points_earned = db.Column(db.Numeric(10, 2), nullable=False, default=0)
-    points_used = db.Column(db.Numeric(10, 2), nullable=False, default=0)  
-    discount = db.Column(db.Numeric(10, 2), nullable=False, default=0)      
+    points_used = db.Column(db.Numeric(10, 2), nullable=False, default=0)   # points spent on this purchase
+    discount = db.Column(db.Numeric(10, 2), nullable=False, default=0)      # dollars taken off by those points
     purchased_at = db.Column(db.Text, nullable=False, server_default=func.now())
     membership_number = db.Column(db.Integer, db.ForeignKey("Customer.membership_number"), nullable=True)
     lines = db.relationship("ReceiptLine", backref="receipt", cascade="all, delete-orphan",

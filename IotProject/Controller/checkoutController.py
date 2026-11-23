@@ -1,6 +1,4 @@
-import time
 from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
-from threading import Lock
 from flask import Blueprint, jsonify, request, current_app
 from Database.db import db
 from Model.customerModel import Customer
@@ -8,7 +6,6 @@ from Model.receiptModel import Receipt, ReceiptLine
 from Model.checkoutModels import Cart, CartItem, Product  # swap to the merged models later
 from Hardware import rfid_reader
 from GeneralFunction.generalFunction import readToken
-from GeneralFunction.cardNumber import isValidCardNumber
 from Receipts.receipt_email import send_receipt_email
 
 checkout_bp = Blueprint("checkout_bp", __name__)
@@ -16,26 +13,10 @@ checkout_bp = Blueprint("checkout_bp", __name__)
 POINTS_RATE = Decimal("0.10")  # points earned: 10% of what is paid
 POINT_VALUE = Decimal("1.00")  # dollars taken off per point spent
 
-# Wrong membership numbers are limited, so numbers cannot be guessed one after another.
-# Kept in memory: nothing is stored about the customer, and a restart clears it.
-MAX_WRONG_CARDS = 5
-WRONG_CARD_WINDOW = 600   # seconds
-_wrong_cards = {}
-_wrong_cards_lock = Lock()
-
-
-def card_lock_seconds(client):
-    """Seconds left before this device may try a membership number again (0 = allowed)."""
-    now = time.time()
-    with _wrong_cards_lock:
-        recent = [t for t in _wrong_cards.get(client, []) if now - t < WRONG_CARD_WINDOW]
-        _wrong_cards[client] = recent
-        return int(WRONG_CARD_WINDOW - (now - recent[0])) + 1 if len(recent) >= MAX_WRONG_CARDS else 0
-
-
-def note_wrong_card(client):
-    with _wrong_cards_lock:
-        _wrong_cards.setdefault(client, []).append(time.time())
+# Quebec sales taxes. Both are worked out on the price before tax and rounded to the cent
+# (QST is no longer charged on top of GST).
+GST_RATE = Decimal("0.05")      # federal
+QST_RATE = Decimal("0.09975")   # Quebec
 
 
 def mask_email(address):
@@ -45,6 +26,12 @@ def mask_email(address):
 
 def cents(value):
     return Decimal(str(value)).quantize(Decimal("0.01"), ROUND_HALF_UP)
+
+
+def tax_split(subtotal):
+    """(gst, qst, total with tax) for a price before tax."""
+    gst, qst = cents(subtotal * GST_RATE), cents(subtotal * QST_RATE)
+    return gst, qst, subtotal + gst + qst
 
 
 def get_active_cart():
@@ -77,8 +64,11 @@ def cart_payload(cart):
         items.append({"cart_item_id": group["units"][-1].cart_item_id,   # "Remove 1" takes out the latest unit
                       "name": group["name"], "unit_price": float(group["unit_price"]),
                       "quantity": quantity, "line_total": float(line_total)})
-    return {"cart_id": cart.cart_id, "items": items, "total": float(cents(total)),
-            "points": float(cents(total * POINTS_RATE))}
+    subtotal = cents(total)
+    gst, qst, grand = tax_split(subtotal)
+    return {"cart_id": cart.cart_id, "items": items, "subtotal": float(subtotal),
+            "gst": float(gst), "qst": float(qst), "total": float(grand),
+            "points": float(cents(grand * POINTS_RATE))}
 
 
 def add_epc(cart, epc, in_cart):
@@ -158,36 +148,15 @@ def remove_item(cart_item_id):
 
 @checkout_bp.route("/api/pay", methods=["POST"])
 def process_payment():
-    """Pay for the basket. The membership card is optional.
-    With a membership number: the member earns points and the receipt is emailed to them.
-    Without one: a guest purchase, with no points and no email.
-    Spending points also needs the login token, because a membership number alone is easy to guess."""
+    """Pay for the basket. Only logged-in members can pay: the login token says who is paying.
+    The member earns points, can spend them, and gets the receipt by email.
+    GST and QST are added to the price; points are spent on the total with tax."""
     data = request.get_json(silent=True) or {}
-    raw = data.get("card_number")
-    raw = str(raw).strip() if raw is not None else ""
+    member_id = readToken(str(data.get("token") or ""))
+    customer = db.session.get(Customer, member_id) if member_id else None
+    if customer is None:
+        return jsonify({"error": "Log in to pay. Only members can pay."}), 401
     use_points = data.get("use_points") is True
-    customer = None
-    if raw:
-        client = request.remote_addr or "unknown"
-        wait = card_lock_seconds(client)
-        if wait:
-            return jsonify({"error": f"Too many wrong membership numbers. Try again in {wait // 60 + 1} minute(s), or pay without a card.",
-                            "field": "card_number"}), 429
-        if not isValidCardNumber(raw):     # typo or made-up number: caught without asking the database
-            note_wrong_card(client)
-            return jsonify({"error": "That membership number is not valid. Check the digits.",
-                            "field": "card_number"}), 400
-        customer = Customer.query.filter_by(card_number=raw).first()
-        if customer is None:
-            note_wrong_card(client)
-            return jsonify({"error": "We could not find that membership number. Check the card, or pay without one.",
-                            "field": "card_number"}), 404
-    if use_points:
-        if customer is None:
-            return jsonify({"error": "Enter your membership number to use points.", "field": "points"}), 400
-        if readToken(str(data.get("token") or "")) != customer.membership_number:
-            return jsonify({"error": "Log in to this membership account to spend its points.",
-                            "field": "points"}), 401
 
     cart = get_active_cart()
     if not cart.items:
@@ -196,18 +165,18 @@ def process_payment():
     if unavailable:
         return jsonify({"error": f"No longer available: {', '.join(unavailable)}. Remove it and try again."}), 409
 
-    subtotal = cents(cart_payload(cart)["total"])
+    subtotal = cents(cart_payload(cart)["subtotal"])
+    gst, qst, grand = tax_split(subtotal)
     discount = points_used = Decimal("0.00")
-    if use_points:   # all the points they have, but never more than the basket is worth
+    if use_points:   # all the points they have, but never more than the total is worth
         balance = Decimal(str(customer.points or 0)).quantize(Decimal("0.01"), ROUND_DOWN)
-        discount = min((balance * POINT_VALUE).quantize(Decimal("0.01"), ROUND_DOWN), subtotal)
+        discount = min((balance * POINT_VALUE).quantize(Decimal("0.01"), ROUND_DOWN), grand)
         points_used = (discount / POINT_VALUE).quantize(Decimal("0.01"), ROUND_HALF_UP)
-    paid = subtotal - discount
-    earned = cents(paid * POINTS_RATE) if customer else Decimal("0.00")   # points are earned on what was paid
-    number = customer.membership_number if customer else None
+    paid = grand - discount
+    earned = cents(paid * POINTS_RATE)   # points are earned on what was paid
 
-    receipt = Receipt(total=paid, points_earned=earned, points_used=points_used, discount=discount,
-                      membership_number=number)
+    receipt = Receipt(subtotal=subtotal, gst=gst, qst=qst, total=paid, points_earned=earned,
+                      points_used=points_used, discount=discount, membership_number=customer.membership_number)
     db.session.add(receipt)
     db.session.flush()
     for group in group_items(cart.items):
@@ -217,9 +186,8 @@ def process_payment():
         for unit in group["units"]:
             unit.receipt_id = receipt.receipt_id
             unit.product.sold = True   # this exact unit can never be bought again
-    if customer:
-        customer.points = float(cents(Decimal(str(customer.points or 0)) - points_used + earned))
-    cart.membership_number = number
+    customer.points = float(cents(Decimal(str(customer.points or 0)) - points_used + earned))
+    cart.membership_number = customer.membership_number
     cart.session_status = "checked_out"
     try:
         db.session.commit()
@@ -229,24 +197,19 @@ def process_payment():
         return jsonify({"error": "Payment failed. Nothing was charged."}), 500
     db.session.refresh(receipt)
 
-    if customer:
-        ok, detail = send_receipt_email(receipt)   # goes to the member whose card was used
-        if not ok:
-            current_app.logger.warning("Receipt email failed: %s", detail)
-        email_sent = ok
-        email_status = (f"A copy was sent to {mask_email(customer.email)}." if ok
-                        else f"Payment complete, but the receipt was not emailed. {detail}")
-    else:
-        email_sent = None
-        email_status = "Paid without a membership card: no points were added and no receipt was emailed."
+    ok, detail = send_receipt_email(receipt)   # always goes to the member who paid
+    if not ok:
+        current_app.logger.warning("Receipt email failed: %s", detail)
+    email_status = (f"A copy was sent to {mask_email(customer.email)}." if ok
+                    else f"Payment complete, but the receipt was not emailed. {detail}")
     return jsonify({
         "message": "Payment complete.",
-        "email_sent": email_sent,
+        "email_sent": ok,
         "email_status": email_status,
         "receipt": {"receipt_id": receipt.receipt_id, "purchased_at": str(receipt.purchased_at),
                     "membership_number": receipt.membership_number,
-                    "subtotal": float(subtotal), "discount": float(receipt.discount),
-                    "points_used": float(receipt.points_used),
+                    "subtotal": float(receipt.subtotal), "gst": float(receipt.gst), "qst": float(receipt.qst),
+                    "discount": float(receipt.discount), "points_used": float(receipt.points_used),
                     "total": float(receipt.total), "points_earned": float(receipt.points_earned),
                     "lines": [{"name": l.name, "quantity": l.quantity, "unit_price": float(l.unit_price),
                                "line_total": float(l.unit_price * l.quantity)}

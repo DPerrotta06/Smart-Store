@@ -38,12 +38,15 @@
   <!-- RECEIVE STOCK: quantity + date, one EPC per unit -->
   <section id="receive" class="panel" hidden>
     <h1>Receive stock</h1>
-    <p class="muted">Scan the barcode to pick the product, then scan every tag in the delivery.</p>
+    <p class="muted">Pick the product from the list (type part of its name, or scan its barcode), then scan every tag in the delivery.</p>
     <form id="receiveForm">
       <div class="cols">
-        <label>Product barcode (UPC)
-          <div class="input-btn"><input id="recUpc" maxlength="13" inputmode="numeric" placeholder="Scan or type the UPC" autocomplete="off" required>
-          <button type="button" class="btn alt" id="findBtn">Find</button></div></label>
+        <div class="combo">
+          <label for="recSearch">Product (search by name, category or barcode)</label>
+          <input id="recSearch" role="combobox" aria-expanded="false" aria-controls="recList" aria-autocomplete="list"
+                 placeholder="Start typing, or scan the barcode" autocomplete="off">
+          <ul id="recList" class="combo-list" role="listbox" hidden></ul>
+        </div>
         <label>Date received<input type="date" id="recDate" required></label>
       </div>
       <p id="found" class="muted"></p>
@@ -178,7 +181,7 @@ function renderProducts(){
     body.append(tr);
   });
 }
-async function loadProducts(){ const r = await api('/admin/api/products'); if(r.ok){ products = r.products; renderProducts(); findProduct() } else toast(r.error, true) }
+async function loadProducts(){ const r = await api('/admin/api/products'); if(r.ok){ products = r.products; renderProducts(); refreshSelected() } else toast(r.error, true) }
 
 const form = $('#productForm');
 function openProduct(p){
@@ -209,7 +212,7 @@ form.onsubmit = async e => {
   const r = editUpc ? await api(`/admin/api/products/${encodeURIComponent(editUpc)}`, 'PUT', body) : await api('/admin/api/products', 'POST', body);
   if(!r.ok){ $('#prodMsg').textContent = r.error; return }
   $('#productDlg').close(); toast(r.message);
-  products = r.products; renderProducts(); findProduct(); loadInventory();
+  products = r.products; renderProducts(); refreshSelected(); loadInventory();
 };
 
 function openDelete(p){
@@ -221,19 +224,67 @@ $('#confirmDel').onclick = async () => {
   const r = await api(`/admin/api/products/${encodeURIComponent(deleteUpc)}`, 'DELETE');
   $('#deleteDlg').close();
   if(!r.ok) return toast(r.error, true);
-  toast(r.message); products = r.products; renderProducts(); findProduct(); loadInventory();
+  toast(r.message); products = r.products; renderProducts(); refreshSelected(); loadInventory();
 };
 
 /* ---------- receive stock ---------- */
 const today = new Date(); today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
 $('#recDate').value = today.toISOString().slice(0, 10);
 
-function findProduct(){
-  const upc = $('#recUpc').value.trim();
-  selected = products.find(p => p.upc === upc) || null;
-  $('#found').textContent = !upc ? '' : selected ? `${selected.name} · ${selected.in_stock} in stock` : 'No registered product has this UPC. Register it under Products first.';
+function refreshSelected(){
+  if(selected) selected = products.find(p => p.upc === selected.upc) || null;
+  showFound();
+}
+function showFound(){
+  $('#found').textContent = selected ? `${selected.name} · UPC ${selected.upc} · ${selected.in_stock} in stock` : '';
   drawTags();
 }
+/* searchable drop-down: asks the server for the best 20 matches, so thousands of products stay fast */
+let comboItems = [], comboIdx = -1, comboTimer = null, comboSeq = 0;
+function comboClose(){ $('#recList').hidden = true; $('#recSearch').setAttribute('aria-expanded', 'false'); comboIdx = -1 }
+function comboPick(p){
+  selected = p; $('#recSearch').value = p.name; comboClose(); showFound(); $('#manualEpc').focus();
+}
+function comboDraw(more){
+  const ul = $('#recList'); ul.replaceChildren();
+  if(!comboItems.length){ ul.append(el('li', 'No registered product matches. Register it under Products first.', 'combo-empty')) }
+  comboItems.forEach((p, i) => {
+    const li = el('li', undefined, 'combo-opt'); li.setAttribute('role', 'option'); li.id = 'opt' + i;
+    li.setAttribute('aria-selected', i === comboIdx);
+    li.append(el('b', p.name), el('small', `${p.category} · UPC ${p.upc} · ${p.in_stock} in stock`));
+    li.onmousedown = e => { e.preventDefault(); comboPick(p) };   // before the input loses focus
+    ul.append(li);
+  });
+  if(more) ul.append(el('li', 'More products match. Keep typing to narrow the list.', 'combo-empty'));
+  ul.hidden = false; $('#recSearch').setAttribute('aria-expanded', 'true');
+}
+async function comboSearch(){
+  const seq = ++comboSeq, q = $('#recSearch').value.trim();
+  const r = await api('/admin/api/product_search?q=' + encodeURIComponent(q));
+  if(seq !== comboSeq) return;                       // a newer search is already on its way
+  if(!r.ok) return toast(r.error, true);
+  comboItems = r.products; comboIdx = comboItems.length ? 0 : -1; comboDraw(r.more);
+  const exact = /^\d{8,13}$/.test(q) && comboItems.find(p => p.upc === q);   // a scanned barcode picks itself
+  if(exact) comboPick(exact);
+}
+$('#recSearch').oninput = () => {
+  selected = null; showFound();                      // typing again clears the old choice
+  clearTimeout(comboTimer); comboTimer = setTimeout(comboSearch, 200);
+};
+$('#recSearch').onfocus = () => { if(!selected) comboSearch() };
+$('#recSearch').onblur = comboClose;
+$('#recSearch').onkeydown = e => {
+  const open = !$('#recList').hidden;
+  if(e.key === 'ArrowDown' || e.key === 'ArrowUp'){
+    e.preventDefault(); if(!open) return comboSearch();
+    if(!comboItems.length) return;
+    comboIdx = (comboIdx + (e.key === 'ArrowDown' ? 1 : -1) + comboItems.length) % comboItems.length;
+    comboDraw(false); $('#opt' + comboIdx).scrollIntoView({block: 'nearest'});
+  }else if(e.key === 'Enter'){
+    e.preventDefault();
+    if(open && comboItems[comboIdx]) comboPick(comboItems[comboIdx]); else comboSearch();
+  }else if(e.key === 'Escape') comboClose();
+};
 function drawTags(){
   $('#tagCount').textContent = tags.length;
   const ul = $('#epcList'); ul.replaceChildren();
@@ -250,9 +301,6 @@ function addTags(list){
   list.forEach(t => { if(!tags.includes(t)){ tags.push(t); added++ } });
   drawTags(); return added;
 }
-$('#recUpc').oninput = findProduct;
-$('#findBtn').onclick = findProduct;
-$('#recUpc').onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); findProduct(); $('#manualEpc').focus() } };
 $('#rfidScan').onclick = async e => {
   e.target.disabled = true; toast('Scanning tags…');
   const r = await api('/admin/api/scan', 'POST'); e.target.disabled = false;
@@ -270,10 +318,10 @@ $('#manualAdd').onclick = manualAdd;
 $('#manualEpc').onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); manualAdd() } };
 $('#receiveForm').onsubmit = async e => {
   e.preventDefault(); $('#recMsg').textContent = '';
-  const r = await api('/admin/api/receive', 'POST', {upc: $('#recUpc').value.trim(), date_received: $('#recDate').value, epcs: tags});
+  const r = await api('/admin/api/receive', 'POST', {upc: selected ? selected.upc : '', date_received: $('#recDate').value, epcs: tags});
   if(!r.ok){ $('#recMsg').textContent = r.error; return }
-  toast(r.message); tags = []; $('#recUpc').value = '';
-  products = r.products; renderProducts(); findProduct(); loadInventory();
+  toast(r.message); tags = []; $('#recSearch').value = ''; selected = null;
+  products = r.products; renderProducts(); showFound(); loadInventory();
 };
 
 /* ---------- inventory ---------- */
