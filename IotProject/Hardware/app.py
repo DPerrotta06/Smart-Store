@@ -2,9 +2,13 @@ import json
 import os
 from flask import Flask, render_template, request, jsonify
 import paho.mqtt.client as mqtt
+import threading
+import socket.io # a 2 way asynchronous event based-communication
 
 app = Flask(__name__)
 THRESHOLD_FILE = "thresholds.json"
+socket = socketio.Client()
+events = {}
 
 # Stores the latest live readings in memory for the gauges
 sensor_data = {
@@ -39,6 +43,16 @@ def on_message(client, userdata, msg):
     except Exception as e:
         print(f"Error parsing MQTT message: {e}")
 
+def start_patreo():
+    socket.connect('http://localhost:3001')
+    socket.wait()
+
+@socket.on('dynamb')
+def process_ambient_data(data):
+    events.append(data)
+    if len(events) > 50:
+        events.pop(0)
+
 mqtt_client = mqtt.Client()
 mqtt_client.on_connect = on_connect
 mqtt_client.on_message = on_message
@@ -68,6 +82,11 @@ def update_thresholds():
         
     write_thresholds(thresholds)
     return jsonify({"status": "saved", "thresholds": thresholds})
+
+@app.route("/api/ble", methods=["GET"])
+def get_ble_data():
+    return jsonify(events)
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
