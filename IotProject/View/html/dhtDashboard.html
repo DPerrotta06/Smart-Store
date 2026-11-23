@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>Refrigerator Sensor Dashboard</title>
@@ -7,17 +8,64 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/raphael/2.3.0/raphael.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/justgage/1.6.1/justgage.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; background: #f4f4f9; text-align: center; margin: 20px; }
-        .dashboard { display: flex; justify-content: center; gap: 40px; flex-wrap: wrap; }
-        .fridge-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); width: 420px; }
-        .gauges { display: flex; justify-content: space-around; }
-        .gauge-box { width: 180px; height: 150px; }
-        .threshold-box { margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd; }
-        input[type="number"] { width: 70px; padding: 5px; font-size: 14px; }
-        button { padding: 6px 12px; cursor: pointer; }
-        .status { font-size: 12px; color: green; height: 16px; margin-top: 5px; }
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f4f9;
+            text-align: center;
+            margin: 20px;
+        }
+
+        .dashboard {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            flex-wrap: wrap;
+        }
+
+        .fridge-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+            width: 420px;
+        }
+
+        .gauges {
+            display: flex;
+            justify-content: space-around;
+        }
+
+        .gauge-box {
+            width: 180px;
+            height: 150px;
+        }
+
+        .threshold-box {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+        }
+
+        input[type="number"] {
+            width: 70px;
+            padding: 5px;
+            font-size: 14px;
+        }
+
+        button {
+            padding: 6px 12px;
+            cursor: pointer;
+        }
+
+        .status {
+            font-size: 12px;
+            color: green;
+            height: 16px;
+            margin-top: 5px;
+        }
     </style>
 </head>
+
 <body>
 
     <h2>Store Refrigerator Dashboard</h2>
@@ -50,6 +98,13 @@
                 <button onclick="saveThresholds()">Save</button>
             </div>
         </div>
+        <!-- BLE Sensor -->
+        <div class="fridge-card">
+            <h3>BLE Sensor</h3>
+            <div id="ble-temp" class="gauge-box"></div>
+            <div id="ble-hum" class="gauge-box"></div>
+            <div>id="ble"</div>
+        </div>
     </div>
 
     <div id="saveStatus" class="status"></div>
@@ -57,9 +112,12 @@
     <script>
         // Initialize the 4 gauges
         const temp1Gauge = new JustGage({ id: "g_temp1", value: 0, min: -10, max: 50, title: "Temperature", label: "°C", decimals: 1 });
-        const hum1Gauge  = new JustGage({ id: "g_hum1",  value: 0, min: 0,   max: 100, title: "Humidity",    label: "%",  decimals: 1 });
+        const hum1Gauge = new JustGage({ id: "g_hum1", value: 0, min: 0, max: 100, title: "Humidity", label: "%", decimals: 1 });
         const temp2Gauge = new JustGage({ id: "g_temp2", value: 0, min: -10, max: 50, title: "Temperature", label: "°C", decimals: 1 });
-        const hum2Gauge  = new JustGage({ id: "g_hum2",  value: 0, min: 0,   max: 100, title: "Humidity",    label: "%",  decimals: 1 });
+        const hum2Gauge = new JustGage({ id: "g_hum2", value: 0, min: 0, max: 100, title: "Humidity", label: "%", decimals: 1 });
+        const bleTempGauge = new JustGage({ id: "ble-temp", value: 0, min: -10, max: 50, title: "Temperature", label: "°C", decimals: 1 });
+        const bleHumGauge = new JustGage({ id: "ble-hum", value: 0, min: 0, max: 100, title: "Humidity", label: "%", decimals: 1 });
+
 
         // Poll Flask every 2 seconds to update gauges from ESP32 MQTT data
         setInterval(() => {
@@ -73,6 +131,16 @@
                 });
         }, 2000);
 
+        //same thing but for BLE sensor
+        setInterval(() => {
+            fetch('/api/ble')
+            .then(res => res.json())
+            .then(data => { 
+                bleTempGauge.refresh(data.BLE.temperature);
+                bleTempGauge.refresh(data.BLE.humidity);
+             })
+        }, 2000);
+
         // Save updated thresholds to thresholds.json via Flask
         function saveThresholds() {
             const t1 = document.getElementById('thresh1').value;
@@ -83,13 +151,14 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ Frig1: t1, Frig2: t2 })
             })
-            .then(res => res.json())
-            .then(() => {
-                const status = document.getElementById('saveStatus');
-                status.innerText = "Thresholds saved to thresholds.json!";
-                setTimeout(() => status.innerText = "", 2500);
-            });
+                .then(res => res.json())
+                .then(() => {
+                    const status = document.getElementById('saveStatus');
+                    status.innerText = "Thresholds saved to thresholds.json!";
+                    setTimeout(() => status.innerText = "", 2500);
+                });
         }
     </script>
 </body>
+
 </html>
