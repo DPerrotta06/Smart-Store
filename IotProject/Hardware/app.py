@@ -1,20 +1,28 @@
 import json
 import os
+import time
+import threading
 from flask import Flask, render_template, request, jsonify
 import paho.mqtt.client as mqtt
 import threading
-import socket.io # a 2 way asynchronous event based-communication
+import socketio # a 2 way asynchronous event based-communication
 
 app = Flask(__name__)
 THRESHOLD_FILE = "thresholds.json"
 socket = socketio.Client()
-events = {}
 
 # Stores the latest live readings in memory for the gauges
 sensor_data = {
     "Frig1": {"temperature": 0.0, "humidity": 0.0},
     "Frig2": {"temperature": 0.0, "humidity": 0.0}
 }
+ble_data = {
+    "BLE": 
+        {
+            "temperature": None, "humidity": None, "illuminance": None, "motion": False, "last_motion": None, "battery": None, "last_seen": None
+        }
+}
+BLE_ID = "" #PUT BLE SENSOR MAC ADDRESS HERE!!!
 
 # --- JSON File Helper Functions ---
 def read_thresholds():
@@ -44,14 +52,33 @@ def on_message(client, userdata, msg):
         print(f"Error parsing MQTT message: {e}")
 
 def start_patreo():
-    socket.connect('http://localhost:3001')
-    socket.wait()
+    while True:
+        try:
+            socket.connect('http://localhost:3001')
+            socket.wait()
+        except Exception as e:
+            print("Connection failed: ", e)
+            time.sleep(7)
 
 @socket.on('dynamb')
-def process_ambient_data(data):
-    events.append(data)
-    if len(events) > 50:
-        events.pop(0)
+def on_dynamb(data):
+    if str(data.get("deviceId", "")).lower() != BLE_ID:
+        return
+    ble = ble_data["BLE"]
+    if "temperature" in data:
+        ble["temperature"] = data["temperature"]
+    if "relativeHumidity" in data:
+        ble["humidity"] = data["relativeHumidity"]
+    if "illuminance" in data:
+        ble["illuminance"] = data["illuminance"]
+    if "batteryPercentage" in data:
+        ble["battery"] = data["batteryPercentage"]
+    if "isMotionDetectd" in data:
+        motion = data["isMotionDetectd"]
+        ble["motion"] = bool(motion[0] if isinstance(motion, list) else motion)
+        if ble["motion"]:
+            ble["last_motion"] = time.time()
+        ble["last_seen"] = time.time()
 
 mqtt_client = mqtt.Client()
 mqtt_client.on_connect = on_connect
@@ -85,8 +112,11 @@ def update_thresholds():
 
 @app.route("/api/ble", methods=["GET"])
 def get_ble_data():
-    return jsonify(events)
+    ble = ble_data["BLE"]
+    isOnline = ble["last_seen"] is not None and time.time() - bl["last_seen"] < 30
+    return jsonify({"BLE": {**ble, 'online':isOnline}})
 
 
 if __name__ == "__main__":
+    threading.Thread(target=start_patreo, daemon=True).start()
     app.run(host="0.0.0.0", port=5000, debug=True)
