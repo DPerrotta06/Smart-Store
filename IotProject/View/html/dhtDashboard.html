@@ -2,94 +2,443 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Refrigerator Sensor Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Store Sensor Dashboard</title>
     <!-- Raphael & JustGage CDN for simple gauges -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/raphael/2.3.0/raphael.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/justgage/1.6.1/justgage.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; background: #f4f4f9; text-align: center; margin: 20px; }
-        .dashboard { display: flex; justify-content: center; gap: 40px; flex-wrap: wrap; }
-        .fridge-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); width: 420px; }
-        .gauges { display: flex; justify-content: space-around; }
-        .gauge-box { width: 180px; height: 150px; }
-        .threshold-box { margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd; }
-        input[type="number"] { width: 70px; padding: 5px; font-size: 14px; }
-        button { padding: 6px 12px; cursor: pointer; }
-        .status { font-size: 12px; color: green; height: 16px; margin-top: 5px; }
+        :root {
+            --bg: #eaf1f5;
+            --surface: #ffffff;
+            --ink: #14232e;
+            --muted: #5d7080;
+            --line: #d5e0e8;
+            --accent: #1d7fa3;
+            --temp: #c8602f;
+            --humid: #4f7cc2;
+            --light: #d9a100;
+            --ok: #2f8f5b;
+            --ok-soft: #e0f2e8;
+            --bad: #c8402f;
+            --bad-soft: #fbe6e2;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            background: linear-gradient(180deg, #dfeaf0 0%, var(--bg) 260px);
+            color: var(--ink);
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+            line-height: 1.4;
+        }
+
+        .page { max-width: 1280px; margin: 0 auto; padding: 36px 20px 56px; }
+
+        /* header */
+        .top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 28px; }
+        .top h1 { margin: 0; font-size: 1.8rem; letter-spacing: -0.02em; }
+        .top p { margin: 2px 0 0; color: var(--muted); }
+        .live { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; font-size: .9rem; font-weight: 600; color: var(--ok); background: var(--ok-soft); border-radius: 999px; }
+        .live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+
+        /* cards */
+        .dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 24px; align-items: stretch; }
+        .card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 24px; box-shadow: 0 8px 24px rgba(20, 35, 46, 0.07); display: flex; flex-direction: column; }
+        .card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+        .card-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: #e3f1f6; color: var(--accent); }
+        .card-icon svg { width: 22px; height: 22px; }
+        .card-head h3 { margin: 0; font-size: 1.1rem; }
+        .card-head small { display: block; color: var(--muted); font-size: .8rem; }
+
+        /* fridge gauges */
+        .gauges { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: 1; align-content: center; }
+        .gauge-box { width: 100%; height: 150px; }
+
+        .threshold-box { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+        .threshold-box label { color: var(--muted); font-size: .95rem; }
+        input[type="number"] { width: 84px; padding: 8px 10px; font-size: 1rem; color: var(--ink); border: 1px solid #b5c4cf; border-radius: 8px; background: #fbfdfe; }
+        input[type="number"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+        button { padding: 9px 18px; font-size: .95rem; font-weight: 600; color: #fff; background: var(--accent); border: none; border-radius: 8px; cursor: pointer; transition: background .15s; }
+        button:hover { background: #17667f; }
+        button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+        .status { min-height: 20px; margin-top: 22px; text-align: center; font-size: .9rem; font-weight: 600; color: var(--ok); }
+
+        /* BLE sensor card */
+        .ble-gauges { flex: none; margin-bottom: 12px; }
+        .ble-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .tile { padding: 16px; border-radius: 14px; }
+        .tile-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: .85rem; font-weight: 600; }
+        .tile-head svg { width: 18px; height: 18px; flex: none; }
+        .tile-value { font-size: 2rem; font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; }
+        .tile-value small { margin-left: 3px; font-size: .9rem; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+        .tile-note { margin: 6px 0 0; font-size: .8rem; color: var(--muted); }
+        .bar { height: 8px; margin-top: 12px; background: rgba(20, 35, 46, 0.09); border-radius: 999px; overflow: hidden; }
+        .bar span { display: block; height: 100%; border-radius: 999px; }
+
+        .tile.light { background: #fdf6dc; } .tile.light .tile-head { color: #a67c00; }     .tile.light .bar span { background: var(--light); }
+        .tile.motion { background: #eef2f5; } .tile.motion .tile-head { color: var(--muted); }
+
+        .motion-row { display: flex; align-items: center; gap: 10px; }
+        .motion-dot { width: 20px; height: 20px; border-radius: 50%; background: #b9c6cf; flex: none; }
+        .motion-text { font-size: 1.25rem; font-weight: 700; }
+        /* add class "active" to .tile.motion for the red state */
+        .tile.motion.active { background: var(--bad-soft); }
+        .tile.motion.active .tile-head, .tile.motion.active .motion-text { color: var(--bad); }
+        .tile.motion.active .motion-dot { background: var(--bad); }
+
+        /* BLE device info */
+        .ble-state { margin-left: auto; padding: 4px 12px; font-size: .8rem; font-weight: 600; color: var(--muted); background: #eef2f5; border-radius: 999px; }
+        .ble-state.on { color: var(--ok); background: var(--ok-soft); }
+        .device { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+        .device-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .device-actions { margin: 14px 0 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+        button.device-toggle { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 50%; }
+        button.device-toggle:hover { color: var(--ink); background: #f1f6f9; }
+        .device-toggle svg { width: 16px; height: 16px; }
+        .device-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+        .device-head h4 { margin: 0; font-size: .95rem; }
+        .info { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; font-size: .9rem; }
+        .info dt { color: var(--muted); }
+        .info dd { margin: 0; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+        .device-msg { min-height: 18px; margin: 10px 0 0; font-size: .8rem; color: var(--muted); }
+        .device-msg.err { color: var(--bad); }
+        button.ghost { color: var(--ink); background: transparent; border: 1px solid var(--line); }
+        button.ghost:hover { background: #f1f6f9; }
+        button:disabled { opacity: .5; cursor: not-allowed; }
+
+        @media (prefers-reduced-motion: no-preference) {
+            .bar span { transition: width .6s ease; }
+            .device-toggle svg { transition: transform .2s ease; }
+        }
     </style>
 </head>
 <body>
+<main class="page">
 
-    <h2>Store Refrigerator Dashboard</h2>
+    <header class="top">
+        <div>
+            <h1>Store Sensor Dashboard</h1>
+            <p>Refrigerators and BLE room sensor</p>
+        </div>
+        <span class="live">Live</span>
+    </header>
 
     <div class="dashboard">
+
         <!-- Refrigerator 1 -->
-        <div class="fridge-card">
-            <h3>Refrigerator 1 (Frig1)</h3>
+        <section class="card">
+            <div class="card-head">
+                <span class="card-icon">
+                    <svg viewBox="0 0 24 28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="1" width="18" height="26" rx="3"/><line x1="3" y1="11" x2="21" y2="11"/><line x1="7.5" y1="5" x2="7.5" y2="8"/><line x1="7.5" y1="15" x2="7.5" y2="21"/></svg>
+                </span>
+                <div><h3>Refrigerator 1</h3><small>Frig1</small></div>
+            </div>
             <div class="gauges">
                 <div id="g_temp1" class="gauge-box"></div>
                 <div id="g_hum1" class="gauge-box"></div>
             </div>
             <div class="threshold-box">
-                <label>Temp Threshold (°C): </label>
+                <label for="thresh1">Temp threshold (°C)</label>
                 <input type="number" step="0.5" id="thresh1" value="{{ thresholds.Frig1 }}">
                 <button onclick="saveThresholds()">Save</button>
             </div>
-        </div>
+        </section>
 
         <!-- Refrigerator 2 -->
-        <div class="fridge-card">
-            <h3>Refrigerator 2 (Frig2)</h3>
+        <section class="card">
+            <div class="card-head">
+                <span class="card-icon">
+                    <svg viewBox="0 0 24 28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="1" width="18" height="26" rx="3"/><line x1="3" y1="11" x2="21" y2="11"/><line x1="7.5" y1="5" x2="7.5" y2="8"/><line x1="7.5" y1="15" x2="7.5" y2="21"/></svg>
+                </span>
+                <div><h3>Refrigerator 2</h3><small>Frig2</small></div>
+            </div>
             <div class="gauges">
                 <div id="g_temp2" class="gauge-box"></div>
                 <div id="g_hum2" class="gauge-box"></div>
             </div>
             <div class="threshold-box">
-                <label>Temp Threshold (°C): </label>
+                <label for="thresh2">Temp threshold (°C)</label>
                 <input type="number" step="0.5" id="thresh2" value="{{ thresholds.Frig2 }}">
                 <button onclick="saveThresholds()">Save</button>
             </div>
-        </div>
+        </section>
+
+        <!-- BLE sensor: temperature, humidity, light and movement -->
+        <section class="card">
+            <div class="card-head">
+                <span class="card-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.5l11 11L12 23V1l5.5 5.5-11 11"/></svg>
+                </span>
+                <div><h3>BLE Sensor</h3><small>Room conditions</small></div>
+                <span class="ble-state" id="ble-state">Not connected</span>
+            </div>
+
+            <div class="gauges ble-gauges">
+                <div id="g_temp3" class="gauge-box"></div>
+                <div id="g_hum3" class="gauge-box"></div>
+            </div>
+
+            <div class="ble-grid">
+                <div class="tile light">
+                    <div class="tile-head">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+                        Light level
+                    </div>
+                    <div class="tile-value"><span id="light-value">--</span><small>lux</small></div>
+                    <div class="bar"><span id="light-bar" style="width:0"></span></div>
+                    <p class="tile-note" id="light-label">No data</p>
+                </div>
+
+                <div class="tile motion" id="motion-tile">
+                    <div class="tile-head">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="2"/><path d="M8 8a5.7 5.7 0 0 0 0 8M16 8a5.7 5.7 0 0 1 0 8M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14"/></svg>
+                        Movement
+                    </div>
+                    <div class="motion-row">
+                        <span class="motion-dot"></span>
+                        <span class="motion-text" id="motion-text">--</span>
+                    </div>
+                    <p class="tile-note" id="motion-note">No data</p>
+                </div>
+            </div>
+
+            <div class="device">
+                <div class="device-head">
+                    <h4 id="device-title">Device information</h4>
+                    <button type="button" class="device-toggle" id="device-toggle" aria-expanded="false" aria-controls="device-body" aria-label="Show device information">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                    </button>
+                </div>
+                <div id="device-body" hidden>
+                <div class="device-actions">
+                    <button type="button" id="ble-connect">Connect sensor</button>
+                    <button type="button" id="ble-disconnect" class="ghost" hidden>Disconnect</button>
+                </div>
+                <dl class="info">
+                    <dt>Name</dt><dd id="info-name">--</dd>
+                    <dt>Serial number</dt><dd id="info-serial">--</dd>
+                    <dt>Manufacturer</dt><dd id="info-manufacturer">--</dd>
+                    <dt>Model</dt><dd id="info-model">--</dd>
+                    <dt>Hardware revision</dt><dd id="info-hardware">--</dd>
+                    <dt>Firmware revision</dt><dd id="info-firmware">--</dd>
+                    <dt>Software revision</dt><dd id="info-software">--</dd>
+                    <dt>Battery</dt><dd id="info-battery">--</dd>
+                    <dt>Device ID</dt><dd id="info-id">--</dd>
+                </dl>
+                <p class="device-msg" id="ble-msg" role="status"></p>
+                </div>
+            </div>
+        </section>
+
     </div>
 
-    <div id="saveStatus" class="status"></div>
+    <div id="saveStatus" class="status" role="status"></div>
+</main>
 
-    <script>
-        // Initialize the 4 gauges
-        const temp1Gauge = new JustGage({ id: "g_temp1", value: 0, min: -10, max: 50, title: "Temperature", label: "°C", decimals: 1 });
-        const hum1Gauge  = new JustGage({ id: "g_hum1",  value: 0, min: 0,   max: 100, title: "Humidity",    label: "%",  decimals: 1 });
-        const temp2Gauge = new JustGage({ id: "g_temp2", value: 0, min: -10, max: 50, title: "Temperature", label: "°C", decimals: 1 });
-        const hum2Gauge  = new JustGage({ id: "g_hum2",  value: 0, min: 0,   max: 100, title: "Humidity",    label: "%",  decimals: 1 });
+<script>
 
-        // Poll Flask every 2 seconds to update gauges from ESP32 MQTT data
-        setInterval(() => {
-            fetch('/api/sensors')
-                .then(res => res.json())
-                .then(data => {
-                    temp1Gauge.refresh(data.Frig1.temperature);
-                    hum1Gauge.refresh(data.Frig1.humidity);
-                    temp2Gauge.refresh(data.Frig2.temperature);
-                    hum2Gauge.refresh(data.Frig2.humidity);
-                });
-        }, 2000);
+    function makeGauge(id, min, max, title, label, color, extra) {
+        return new JustGage(Object.assign({
+            id: id, value: 0, min: min, max: max, decimals: 1,
+            title: title, label: label,
+            gaugeColor: "#e3ebf1",
+            levelColors: [color],
+            gaugeWidthScale: 0.55,
+            valueFontColor: "#14232e",
+            valueFontFamily: "system-ui, Arial, sans-serif",
+            titleFontColor: "#5d7080",
+            titleFontFamily: "system-ui, Arial, sans-serif",
+            labelFontColor: "#5d7080",
+            counter: true
+        }, extra || {}));
+    }
 
-        // Save updated thresholds to thresholds.json via Flask
-        function saveThresholds() {
-            const t1 = document.getElementById('thresh1').value;
-            const t2 = document.getElementById('thresh2').value;
+    // Initialize the 4 gauges
+    const temp1Gauge = makeGauge("g_temp1", -10, 50, "Temperature", "°C", "#c8602f");
+    const hum1Gauge  = makeGauge("g_hum1",   0, 100, "Humidity",    "%",  "#4f7cc2");
+    const temp2Gauge = makeGauge("g_temp2", -10, 50, "Temperature", "°C", "#c8602f");
+    const hum2Gauge  = makeGauge("g_hum2",   0, 100, "Humidity",    "%",  "#4f7cc2");
 
-            fetch('/api/thresholds', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ Frig1: t1, Frig2: t2 })
-            })
-            .then(res => res.json())
-            .then(() => {
-                const status = document.getElementById('saveStatus');
-                status.innerText = "Thresholds saved to thresholds.json!";
-                setTimeout(() => status.innerText = "", 2500);
-            });
+    const bleHas = { temp: false, hum: false };
+    const bleTempGauge = makeGauge("g_temp3", -10, 50, "Temperature", "°C", "#c8602f",
+        { value: -10, textRenderer: v => bleHas.temp ? Number(v).toFixed(1) : "--" });
+    const bleHumGauge  = makeGauge("g_hum3",   0, 100, "Humidity",    "%",  "#4f7cc2",
+        { value: 0, textRenderer: v => bleHas.hum ? Number(v).toFixed(1) : "--" });
+
+    // ---- BLE live readings ----
+    const LUX_MAX = 10000;
+    let lastMotion = null;
+
+    function lightLabel(lux) {
+        if (lux < 10) return "Dark";
+        if (lux < 100) return "Dim";
+        if (lux < 500) return "Indoor lighting";
+        if (lux < 5000) return "Bright";
+        return "Daylight";
+    }
+
+    function updateBle(d) {
+        if (typeof d.temperature === 'number') { bleHas.temp = true; bleTempGauge.refresh(d.temperature); }
+        if (typeof d.humidity === 'number')    { bleHas.hum = true;  bleHumGauge.refresh(d.humidity); }
+
+        if (typeof d.light === 'number') {
+            const fraction = Math.min(Math.log10(Math.max(d.light, 1)) / Math.log10(LUX_MAX), 1);
+            document.getElementById('light-value').textContent = Math.round(d.light).toLocaleString();
+            document.getElementById('light-bar').style.width = (fraction * 100) + '%';
+            document.getElementById('light-label').textContent = lightLabel(d.light);
         }
-    </script>
+
+        if (d.motion !== undefined && d.motion !== null) {
+            const moving = Boolean(d.motion);
+            if (moving) lastMotion = new Date();
+            document.getElementById('motion-tile').classList.toggle('active', moving);
+            document.getElementById('motion-text').textContent = moving ? 'Motion detected' : 'No motion';
+            document.getElementById('motion-note').textContent = lastMotion
+                ? 'Last movement at ' + lastMotion.toLocaleTimeString()
+                : 'No movement seen yet';
+        }
+    }
+
+    setInterval(() => {
+        fetch('/api/sensors')
+            .then(res => res.json())
+            .then(data => {
+                temp1Gauge.refresh(data.Frig1.temperature);
+                hum1Gauge.refresh(data.Frig1.humidity);
+                temp2Gauge.refresh(data.Frig2.temperature);
+                hum2Gauge.refresh(data.Frig2.humidity);
+            });
+    }, 2000);
+
+
+    function saveThresholds() {
+        const t1 = document.getElementById('thresh1').value;
+        const t2 = document.getElementById('thresh2').value;
+
+        fetch('/api/thresholds', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ Frig1: t1, Frig2: t2 })
+        })
+        .then(res => res.json())
+        .then(() => {
+            const status = document.getElementById('saveStatus');
+            status.innerText = "Thresholds saved to thresholds.json!";
+            setTimeout(() => status.innerText = "", 2500);
+        });
+    }
+
+    // BLE DEVICE INFORMATION
+    const bleBtn = document.getElementById('ble-connect');
+    const bleOff = document.getElementById('ble-disconnect');
+    const bleMsg = document.getElementById('ble-msg');
+    const bleState = document.getElementById('ble-state');
+    const INFO_FIELDS = [
+        ['serial_number_string',     'info-serial'],
+        ['manufacturer_name_string', 'info-manufacturer'],
+        ['model_number_string',      'info-model'],
+        ['hardware_revision_string', 'info-hardware'],
+        ['firmware_revision_string', 'info-firmware'],
+        ['software_revision_string', 'info-software']
+    ];
+    let bleDevice = null;
+
+    function setInfo(id, text) { document.getElementById(id).textContent = text; }
+
+    function showMsg(text, isError) {
+        bleMsg.textContent = text;
+        bleMsg.classList.toggle('err', !!isError);
+    }
+
+    function showConnected(on) {
+        bleState.textContent = on ? 'Connected' : 'Not connected';
+        bleState.classList.toggle('on', on);
+        bleBtn.hidden = on;
+        bleOff.hidden = !on;
+    }
+
+    function clearInfo() {
+        ['info-name', 'info-id', 'info-battery', ...INFO_FIELDS.map(f => f[1])].forEach(id => setInfo(id, '--'));
+    }
+
+    async function readText(service, name) {
+        try {
+            const characteristic = await service.getCharacteristic(name);
+            const value = await characteristic.readValue();
+            return new TextDecoder().decode(value).replace(/\0/g, '').trim() || '--';
+        } catch (e) {
+            return 'Not provided';  
+        }
+    }
+
+    async function readDeviceInfo(server) {
+        try {
+            const dis = await server.getPrimaryService('device_information');
+            for (const [name, id] of INFO_FIELDS) setInfo(id, await readText(dis, name));
+        } catch (e) {
+            INFO_FIELDS.forEach(f => setInfo(f[1], 'Not provided'));
+        }
+        try {
+            const battery = await server.getPrimaryService('battery_service');
+            const level = await (await battery.getCharacteristic('battery_level')).readValue();
+            setInfo('info-battery', level.getUint8(0) + ' %');
+        } catch (e) {
+            setInfo('info-battery', 'Not provided');
+        }
+    }
+
+    async function connectBle() {
+        if (!navigator.bluetooth) {
+            showMsg('Web Bluetooth is not available. Use Chrome or Edge, and open this page over https or localhost.', true);
+            return;
+        }
+        bleBtn.disabled = true;
+        showMsg('Choose your sensor in the browser prompt...');
+        try {
+            bleDevice = await navigator.bluetooth.requestDevice({
+                acceptAllDevices: true,
+                optionalServices: ['device_information', 'battery_service']
+            });
+            bleDevice.addEventListener('gattserverdisconnected', onBleLost);
+            setInfo('info-name', bleDevice.name || 'Unnamed device');
+            setInfo('info-id', bleDevice.id.slice(0, 12) + '...');
+            showMsg('Connecting...');
+            const server = await bleDevice.gatt.connect();
+            showConnected(true);
+            await readDeviceInfo(server);
+            showMsg('');
+        } catch (e) {
+            if (e.name === 'NotFoundError') { showMsg('No device selected.'); }
+            else { showMsg('Could not connect: ' + e.message, true); }
+            showConnected(false);
+        } finally {
+            bleBtn.disabled = false;
+        }
+    }
+
+    function onBleLost() {
+        showConnected(false);
+        showMsg('The sensor disconnected.', true);
+    }
+
+    const toggleBtn = document.getElementById('device-toggle');
+    const deviceBody = document.getElementById('device-body');
+    toggleBtn.addEventListener('click', () => {
+        const open = deviceBody.hidden;
+        deviceBody.hidden = !open;
+        toggleBtn.setAttribute('aria-expanded', open);
+        toggleBtn.setAttribute('aria-label', open ? 'Hide device information' : 'Show device information');
+    });
+
+    bleBtn.addEventListener('click', connectBle);
+    bleOff.addEventListener('click', () => {
+        if (bleDevice && bleDevice.gatt.connected) bleDevice.gatt.disconnect();
+        clearInfo();
+        showMsg('');
+    });
+</script>
 </body>
 </html>
