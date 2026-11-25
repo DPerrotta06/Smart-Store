@@ -5,9 +5,10 @@ from GeneralFunction.generalFunction import normalizeEmail
 from GeneralFunction.generalFunction import issueToken
 from GeneralFunction.cardNumber import newCardNumber, isValidCardNumber
 from Database.db import db
-from GeneralFunction.adminAuth import issueAdminToken
+from GeneralFunction.adminAuth import issueAdminToken, requireAdmin
 from Model.adminModel import isAdmin
 import re
+import mosquitto   # Phase 2: live fridge readings (MQTT) and alert limits
 import time
 from threading import Lock
 import bcrypt
@@ -186,3 +187,28 @@ def signupPage():
     if not saved:
         return fail("Could not create the account. Try again.", 500)
     return jsonify(ok=True, message=f"Account created. Your membership number is {card_number}."), 201
+
+
+# ---------------------------------------------------------------- Phase 2: store sensors dashboard
+
+# The page itself holds no readings: it reads them from /sensors, which needs the admin token.
+@customer_bp.route('/temperature', methods=['GET'])
+def temperature():
+    return render_template("temperature.html", thresholds=mosquitto.read_thresholds())
+
+
+@customer_bp.route('/sensors', methods=['GET'])
+@requireAdmin
+def get_sensors():
+    return jsonify(mosquitto.get_sensor_data())
+
+
+@customer_bp.route('/thresholds', methods=['POST'])
+@requireAdmin
+def update_thresholds():
+    new_data = request.get_json(silent=True) or {}
+    try:
+        thresholds = mosquitto.update_thresholds(new_data)
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    return jsonify({"status": "saved", "thresholds": thresholds})

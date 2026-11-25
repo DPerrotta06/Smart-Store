@@ -57,6 +57,7 @@ dialog::backdrop{background:rgba(10,30,28,.55)}
 .epcs{list-style:none;margin:0 0 16px;padding:0;max-height:160px;overflow:auto;font-family:ui-monospace,Consolas,monospace;font-size:.9rem}
 .epcs li{padding:4px 0;border-bottom:1px dashed var(--line)}
 
+#sResults{margin-top:16px}
 #toasts{position:fixed;right:16px;bottom:16px;display:grid;gap:8px;z-index:9}
 .toast{background:var(--ink);color:#fff;padding:12px 16px;border-radius:10px;border-left:6px solid var(--tag);min-width:220px}
 .toast.err{border-color:#ff8a80}
@@ -81,3 +82,73 @@ details .epcs{margin:8px 0 0;max-height:120px}
 .combo-opt small{display:block;color:var(--mute)}
 .combo-opt:hover,.combo-opt[aria-selected=true]{background:#e3f0ec}
 .combo-empty{padding:10px;color:var(--mute)}
+
+/* reports */
+.lvl{display:inline-block;padding:2px 10px;border-radius:999px;font-weight:700;font-size:.85rem}
+.lvl.ok{background:#d7f2e1;color:#0c5a2c}
+.lvl.moderate{background:#fff1bf;color:#6b4e00}
+.lvl.low{background:#fbd9d6;color:#8c1d16}
+tr.row-low td{background:#fff6f5}
+.mid{color:#8a6400;font-weight:700}
+.legend{font-size:.9rem;color:var(--mute);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.live{display:inline-flex;align-items:center;gap:6px;font-size:.9rem}
+.pulse{width:9px;height:9px;border-radius:50%;background:#1f9d55;animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.3}}
+td.num{font-weight:700}
+.range{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+.range label{margin:0}
+.range input{width:auto}
+.presets{display:flex;gap:6px;flex-wrap:wrap}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:700px){.cols2{grid-template-columns:1fr}}
+.big{font-size:1.4rem;font-weight:800;margin:0;letter-spacing:-.01em}
+.chart{width:100%;height:auto;display:block;margin:8px 0}
+.chart .grid{stroke:var(--line);stroke-width:1}
+.chart .tick{fill:var(--mute);font-size:12px}
+.chart .line{fill:none;stroke:var(--brand);stroke-width:2.5;stroke-linejoin:round}
+.chart .dot{fill:var(--brand)}
+.chart .bar{fill:var(--brand)}
+.chart .bar.best{fill:#1f9d55}
+.chart .bar.worst{fill:#d9822b}
+details summary{margin-top:8px}
+/* customer purchases window */
+dialog.wide{width:min(900px,96vw);max-height:92vh}
+.rcp{border:1px solid var(--line);border-radius:10px;padding:0 14px;margin-bottom:8px}
+.rcp summary{display:flex;justify-content:space-between;gap:12px;padding:12px 0;color:var(--ink)}
+.rcp table{margin-bottom:8px}
+.rcp .sums{text-align:right;margin:0 0 12px;color:var(--mute)}
+.item{border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+.up{color:var(--bad);font-weight:700}
+.down{color:#1f7a44;font-weight:700}
+
+/* Save as PDF (print) */
+.printhead{display:none}
+@media print{
+  @page{margin:14mm}
+  body{background:#fff;font-size:12pt}
+  header.top,.tabs,#toasts,.panel:has(> .range),[data-print],.pulse,details>summary{display:none!important}
+  .wrap{padding:0;max-width:none}
+  .printhead{display:block;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #000;font-size:11pt}
+  .printhead b{font-size:16pt}
+  .panel{border:1px solid #bbb;break-inside:avoid;padding:12px}
+  .stack{gap:10px}
+  .stats{gap:8px}
+  .scroll{overflow:visible}
+  th,td{padding:5px 6px}
+  .lvl,tr.row-low td,.chart .bar,.chart .dot{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+
+/* Save as PDF (direct download): the page looks like this while the PDF is made */
+body.pdf-mode{background:#fff}
+body.pdf-mode header.top,body.pdf-mode .tabs,body.pdf-mode #toasts,body.pdf-mode .panel:has(> .range),
+body.pdf-mode [data-print],body.pdf-mode .pulse,body.pdf-mode details>summary{display:none!important}
+body.pdf-mode .wrap{width:720px;max-width:none;padding:0;margin:0}
+body.pdf-mode .printhead{display:block;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #000;font-size:14px}
+body.pdf-mode .printhead b{font-size:20px}
+body.pdf-mode .panel{border:1px solid #bbb;padding:12px}
+body.pdf-mode .stack{gap:10px}
+body.pdf-mode .scroll{overflow:visible}
+body.pdf-mode .stats{grid-template-columns:repeat(4,1fr)}
+
+/* a link that looks like a button (e.g. "Store sensors" in the admin header) */
+a.btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}

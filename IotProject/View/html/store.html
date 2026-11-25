@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Smart Store checkout</title>
 <link rel="stylesheet" href="{{ url_for('customer_bp.static', filename='style.css') }}">
+<script src="{{ url_for('customer_bp.static', filename='charts.js') }}"></script>
 </head>
 <body>
 
@@ -88,17 +89,45 @@
   </form>
 </dialog>
 
-<!-- Points and past purchases -->
-<dialog id="historyDlg" aria-labelledby="histTitle">
-  <h2 id="histTitle">My purchases</h2>
-  <p>Membership number <b id="histNo"></b> · <b id="histPts"></b> points</p>
-  <div class="scroll">
-    <table>
-      <thead><tr><th>Receipt</th><th>Date</th><th>Total</th><th>Points</th></tr></thead>
-      <tbody id="histRows"></tbody>
-    </table>
+<!-- My purchases: receipt history, total spent, item search -->
+<dialog id="historyDlg" class="wide" aria-labelledby="histTitle">
+  <div class="row">
+    <h2 id="histTitle">My purchases</h2>
+    <button class="btn alt sm" data-close>Close</button>
   </div>
-  <div class="actions"><button class="btn" data-close>Close</button></div>
+  <p>Membership number <b id="histNo"></b> · <b id="histPts"></b> points</p>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-htab="hReceipts">Receipts</button>
+    <button role="tab" aria-selected="false" data-htab="hSearch">Search an item</button>
+  </div>
+
+  <section id="hReceipts">
+    <form class="range" id="hForm">
+      <label>From<input type="date" id="hStart" required></label>
+      <label>To<input type="date" id="hEnd" required></label>
+      <div class="presets">
+        <button type="button" class="btn alt sm" data-preset="today">Today</button>
+        <button type="button" class="btn alt sm" data-preset="week">7 days</button>
+        <button type="button" class="btn alt sm" data-preset="month">30 days</button>
+        <button type="button" class="btn alt sm" data-preset="year">12 months</button>
+      </div>
+      <button class="btn sm">Show</button>
+    </form>
+    <div class="tag" style="margin-top:16px"><span id="hSpentLabel">Total spent</span><strong id="hSpent">$0.00</strong></div>
+    <h3>Spending over time</h3>
+    <div id="hChart"></div>
+    <h3><span id="hCount">0</span> receipt(s)</h3>
+    <div id="hList"></div>
+  </section>
+
+  <section id="hSearch" hidden>
+    <form class="input-btn" id="sForm">
+      <input id="sQuery" placeholder="Item name, for example Coca" autocomplete="off" minlength="2" required>
+      <button class="btn">Search</button>
+    </form>
+    <div id="sResults"><p class="empty">Search for something you bought to see when you bought it and how its price changed.</p></div>
+  </section>
 </dialog>
 
 <!-- Review and pay (members only) -->
@@ -206,15 +235,13 @@ function drawMember(){
   $('#memberName').textContent = `${member.first_name} ${member.last_name}`;
   $('#memberPts').textContent = $('#histPts').textContent = fmt(member.points);
   $('#histNo').textContent = member.card_number;
-  const body = $('#histRows'); body.replaceChildren();
-  if(!receipts.length) body.append(row(['No purchases yet. Your receipts will show up here after you pay.'], 4));
-  receipts.forEach(r => body.append(row([`#${r.receipt_id}`, r.purchased_at, `$${fmt(r.total)}`, `+${fmt(r.points_earned)}`])));
+
 }
 function resetIdle(){
   clearTimeout(idleTimer);
   if(member) idleTimer = setTimeout(() => logout('You were logged out after 2 minutes without activity.'), IDLE_MS);
 }
-function logout(msg){member=token=null;receipts=[];clearTimeout(idleTimer);drawMember();$('#historyDlg').close();toast(msg||'You are logged out.')}
+function logout(msg){member=token=null;receipts=[];$('#hList').replaceChildren();$('#sResults').replaceChildren();clearTimeout(idleTimer);drawMember();$('#historyDlg').close();toast(msg||'You are logged out.')}
 $('#logoutBtn').onclick = () => logout();
 ['pointerdown','keydown'].forEach(ev => addEventListener(ev, resetIdle));
 
@@ -296,6 +323,84 @@ async function pay(){
   $('#receiptDlg').showModal();
   renderCart(await api('/api/cart'));
 }
+
+/* ---------- my purchases ---------- */
+const money = v => '$' + Number(v).toFixed(2);
+const niceDay = d => new Date(d + 'T12:00').toLocaleDateString(undefined, {weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'});
+const shortDay = d => new Date(d + 'T12:00').toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
+const when = t => { const d = new Date(t.replace(' ', 'T')); return d.toLocaleDateString(undefined, {year: 'numeric', month: 'short', day: 'numeric'}) + ' @ ' + d.toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'}) };
+async function memberApi(url){
+  try{
+    const res = await fetch(url, {headers: {'Authorization': 'Bearer ' + token}});
+    const data = await res.json();
+    if(res.status === 401){ $('#historyDlg').close(); logout('Your login expired. Log in again to see your purchases.'); return null }
+    if(!res.ok){ toast(data.error, true); return null }
+    return data;
+  }catch{ toast('Could not reach the store. Try again.', true); return null }
+}
+document.querySelectorAll('[data-htab]').forEach(t => t.onclick = () => {
+  document.querySelectorAll('[data-htab]').forEach(x => x.setAttribute('aria-selected', x === t));
+  ['hReceipts', 'hSearch'].forEach(id => $('#' + id).hidden = id !== t.dataset.htab);
+  if(t.dataset.htab === 'hSearch') $('#sQuery').focus();
+});
+function setRange(name){ const [a, b] = presetRange(name); $('#hStart').value = a; $('#hEnd').value = b }
+$('#hForm').querySelectorAll('[data-preset]').forEach(b => b.onclick = () => { setRange(b.dataset.preset); loadHistory() });
+$('#hForm').onsubmit = e => { e.preventDefault(); loadHistory() };
+$('#historyBtn').addEventListener('click', () => { if(!$('#hStart').value) setRange('month'); loadHistory() });
+
+async function loadHistory(){
+  if(!member) return;
+  const r = await memberApi(`/api/me/receipts?start=${$('#hStart').value}&end=${$('#hEnd').value}`); if(!r) return;
+  $('#hSpentLabel').textContent = 'Total spent · ' + (r.start === r.end ? niceDay(r.start) : `${shortDay(r.start)} to ${niceDay(r.end)}`);
+  $('#hSpent').textContent = money(r.total_spent);
+  lineChart($('#hChart'), r.days.map(d => ({label: niceDay(d.date), short: shortDay(d.date), value: d.spent})),
+            {money: true, empty: 'You did not buy anything in this period.', title: 'Spending per day'});
+  $('#hCount').textContent = r.receipts.length;
+  const list = $('#hList'); list.replaceChildren();
+  if(!r.receipts.length) list.append(el('p', 'No receipts in this period.', 'empty'));
+  r.receipts.forEach(rc => {
+    const d = el('details', undefined, 'rcp'), sm = el('summary');
+    sm.append(el('span', `#${rc.receipt_id} · ${when(rc.purchased_at)}`), el('b', money(rc.total)));
+    const t = el('table'), th = el('thead'), hr = el('tr'), tb = el('tbody');
+    ['Item', 'Qty', 'Price', 'Total'].forEach(h => hr.append(el('th', h))); th.append(hr);
+    rc.lines.forEach(l => tb.append(row([l.name, `×${l.quantity}`, money(l.unit_price), money(l.line_total)])));
+    t.append(th, tb);
+    const sums = el('p', undefined, 'sums');
+    sums.textContent = `Subtotal ${money(rc.subtotal)} · GST ${money(rc.gst)} · QST ${money(rc.qst)}` +
+      (rc.discount ? ` · Points −${money(rc.discount)}` : '') + ` · Paid ${money(rc.total)} · +${Number(rc.points_earned).toFixed(2)} points`;
+    d.append(sm, t, sums); list.append(d);
+  });
+}
+
+$('#sForm').onsubmit = async e => {
+  e.preventDefault();
+  const r = await memberApi('/api/me/item_search?q=' + encodeURIComponent($('#sQuery').value.trim())); if(!r) return;
+  const box = $('#sResults'); box.replaceChildren();
+  if(!r.items.length) return box.append(el('p', `You have never bought anything matching "${r.query}".`, 'empty'));
+  r.items.forEach(it => {
+    const card = el('div', undefined, 'item');
+    card.append(el('h3', it.name));
+    card.append(el('p', `Purchased ${it.times} time${it.times === 1 ? '' : 's'} · ${it.quantity} unit${it.quantity === 1 ? '' : 's'} in total`));
+    if(it.times > 1){                                      // price history ("inflation")
+      const ch = el('p'); const up = it.change > 0, same = it.change === 0;
+      ch.append(el('span', `Price change since your first purchase: `),
+                el('span', same ? 'no change' : `${up ? '+' : '−'}${money(Math.abs(it.change))} (${up ? '+' : ''}${it.change_percent}%)`, same ? '' : up ? 'up' : 'down'),
+                el('span', ` · ${money(it.first_price)} → ${money(it.last_price)}`));
+      card.append(ch);
+      const chart = el('div'); card.append(chart);
+      lineChart(chart, it.purchases.map(p => ({label: when(p.purchased_at), short: shortDay(p.purchased_at.slice(0, 10)), value: p.unit_price})),
+                {money: true, fromZero: false, title: `Price of ${it.name} over time`});
+    }
+    const t = el('table'), th = el('thead'), hr = el('tr'), tb = el('tbody');
+    ['Date and time', 'Qty', 'Price each', 'vs first'].forEach(h => hr.append(el('th', h))); th.append(hr);
+    it.purchases.slice().reverse().forEach(p => {
+      const diff = p.change_from_first;
+      tb.append(row([when(p.purchased_at), `×${p.quantity}`, money(p.unit_price), diff ? `${diff > 0 ? '+' : '−'}${money(Math.abs(diff))}` : '–']));
+    });
+    t.append(th, tb); card.append(el('div', undefined, 'scroll')); card.lastChild.append(t);
+    box.append(card);
+  });
+};
 
 api('/api/cart').then(renderCart);
 </script>

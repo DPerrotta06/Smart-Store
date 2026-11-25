@@ -6,16 +6,20 @@ from flask import Blueprint, jsonify, render_template, request, current_app
 from sqlalchemy import case, func, or_
 
 from Database.db import db
-from Model.checkoutModels import Product, StockReception, CartItem  # swap to the merged models later
+from Model.checkoutModels import Product, StockReception, CartItem 
 from Hardware import rfid_reader
 from GeneralFunction.adminAuth import requireAdmin
 
-# No session here either: /admin only serves the page. Every /admin/api call needs the admin token.
 admin_bp = Blueprint("admin_bp", __name__, template_folder="../View/html")  # CSS comes from customer_bp.static
 
 UPC_RE = re.compile(r"\d{1,13}")
 EPC_RE = re.compile(r"[0-9A-F]{22}")
-LOW_STOCK = 3   # a product type with this many units or fewer counts as "running low"
+LOW_STOCK = 3        # this many units or fewer: red, "low"
+MODERATE_STOCK = 10  # this many units or fewer (and more than LOW_STOCK): yellow, "moderate"
+
+
+def stock_level(units):
+    return "low" if units <= LOW_STOCK else "moderate" if units <= MODERATE_STOCK else "ok"
 
 
 def error(message, status=400):
@@ -233,9 +237,12 @@ def inventory():
         if upc in names and len(receptions) < 20:
             receptions.append({"date": rec.date_received, "name": names[upc], "upc": upc,
                                "quantity": rec.stock_quantity})
-    rows = [{"name": t["name"], "upc": t["upc"], "in_stock": t["in_stock"],
-             "last_received": last.get(t["upc"])} for t in types]
+    rows = [{"name": t["name"], "upc": t["upc"], "category": t["category"], "in_stock": t["in_stock"],
+             "level": stock_level(t["in_stock"]), "last_received": last.get(t["upc"])} for t in types]
+    rows.sort(key=lambda r: (r["in_stock"], r["name"]))   # the most urgent first
     return jsonify(
         stats={"types": len(types), "units": sum(t["in_stock"] for t in types),
-               "low": sum(1 for t in types if t["in_stock"] <= LOW_STOCK), "low_limit": LOW_STOCK},
+               "low": sum(1 for t in types if t["in_stock"] <= LOW_STOCK), "low_limit": LOW_STOCK,
+               "moderate": sum(1 for t in types if LOW_STOCK < t["in_stock"] <= MODERATE_STOCK),
+               "moderate_limit": MODERATE_STOCK},
         rows=rows, receptions=receptions)

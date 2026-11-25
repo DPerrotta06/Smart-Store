@@ -1,0 +1,386 @@
+/* Store dashboard (Phase 2), restyled to match the Phase 3/4 pages (style.css).
+   Only the look changed: every class and id the page uses is the same as before. */
+:root {
+    /* same tokens as style.css */
+    --bg: #edf2f0;
+    --surface: #ffffff;
+    --ink: #16292a;
+    --muted: #5d7170;
+    --line: #d3dedb;
+    --brand: #0e6b5c;
+    --brand-d: #0a4f44;
+    --tag: #ffd23f;
+    --r: 14px;
+
+    /* dashboard colours, picked to sit with the brand green */
+    --accent: var(--brand);
+    --humid: #2f6fa8;
+    --danger: #b3261e;
+    --danger-soft: #fbd9d6;
+    --ok: #0c5a2c;
+    --ok-soft: #d7f2e1;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 17px/1.5 "Avenir Next", "Segoe UI", system-ui, sans-serif;
+}
+
+.page {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px clamp(16px, 4vw, 40px) 48px;
+}
+
+/* header: the dark green bar used on the store and admin pages */
+
+.top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 24px;
+    padding: 14px 20px;
+    background: var(--brand-d);
+    color: #fff;
+    border-radius: var(--r);
+}
+
+h1 {
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+.top-right {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+}
+
+/* fan */
+
+.fan {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 8px 6px 12px;
+    background: var(--surface);
+    color: var(--ink);
+    border-radius: 12px;
+}
+
+.fan-icon {
+    width: 36px;
+    height: 36px;
+    color: var(--muted);
+}
+
+.fan-icon .hub {
+    fill: var(--surface);
+}
+
+.fan.on .fan-icon {
+    color: var(--brand);
+}
+
+.fan-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 40px;
+    line-height: 1.2;
+}
+
+.fan-title {
+    font-size: 0.8rem;
+    color: var(--muted);
+}
+
+.fan-status {
+    font-weight: 800;
+}
+
+.fan.on .fan-status {
+    color: var(--ok);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .fan.on .fan-icon {
+        animation: spin 0.8s linear infinite;
+    }
+
+    .gauge .fill {
+        transition: stroke-dashoffset 0.6s ease;
+    }
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* alert banner */
+
+.banner {
+    margin-bottom: 20px;
+    padding: 14px 18px;
+    background: var(--danger-soft);
+    color: #5c130e;
+    border-left: 6px solid var(--danger);
+    border-radius: 10px;
+}
+
+.banner p {
+    margin: 4px 0;
+}
+
+/* fridge cards: same as .panel on the other pages */
+
+.fridges {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 24px;
+}
+
+.card {
+    padding: 20px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+}
+
+.card.alert {
+    border: 2px solid var(--danger);
+    padding: 19px;
+}
+
+.card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.card-head h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    letter-spacing: -0.02em;
+}
+
+/* status pill: same look as the stock levels on the admin page */
+
+.status {
+    padding: 2px 10px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--muted);
+    background: var(--bg);
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.status.bad {
+    color: #8c1d16;
+    background: var(--danger-soft);
+}
+
+.status.good {
+    color: var(--ok);
+    background: var(--ok-soft);
+}
+
+/* gauges */
+
+.gauges {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.gauge svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.gauge .track {
+    fill: none;
+    stroke: var(--line);
+    stroke-width: 12;
+    stroke-linecap: round;
+}
+
+.gauge .fill {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 12;
+    stroke-linecap: round;
+}
+
+.gauge.humidity .fill {
+    stroke: var(--humid);
+}
+
+.card.alert .gauge.temp .fill {
+    stroke: var(--danger);
+}
+
+.gauge .limit {
+    stroke: var(--ink);
+    stroke-width: 2.5;
+}
+
+.gauge .value {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    text-anchor: middle;
+    fill: var(--ink);
+}
+
+.gauge .end {
+    font-size: 9px;
+    text-anchor: middle;
+    fill: var(--muted);
+}
+
+.gauge-label {
+    margin: 0;
+    text-align: center;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--muted);
+}
+
+/* threshold form */
+
+.threshold {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+}
+
+.threshold label {
+    font-weight: 600;
+    color: var(--ink);
+}
+
+.threshold input {
+    width: 96px;
+    min-height: 46px;
+    padding: 10px 12px;
+    font: inherit;
+    color: var(--ink);
+    background: #fff;
+    border: 1.5px solid var(--line);
+    border-radius: 8px;
+}
+
+.unit {
+    color: var(--muted);
+}
+
+.note {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--brand);
+}
+
+/* buttons: same as .btn on the other pages */
+
+button {
+    min-height: 44px;
+    padding: 8px 18px;
+    font: inherit;
+    font-weight: 700;
+    color: #fff;
+    background: var(--brand);
+    border: 0;
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+button:hover {
+    background: var(--brand-d);
+}
+
+/* the "Enable notifications" button sits on the dark header, like the header buttons elsewhere */
+button.ghost {
+    color: #fff;
+    background: transparent;
+    box-shadow: inset 0 0 0 2px #fff;
+}
+
+button.ghost:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+:focus-visible {
+    outline: 3px solid #1a73e8;
+    outline-offset: 2px;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+/* icons */
+
+.title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.fridge-icon {
+    width: 22px;
+    height: 26px;
+    color: var(--muted);
+}
+
+.card.live .fridge-icon {
+    color: var(--brand);
+}
+
+.card.alert .fridge-icon {
+    color: var(--danger);
+}
+
+.gauge .th-body,
+.gauge .drop-body {
+    fill: var(--surface);
+    stroke: #9fb2ad;
+    stroke-width: 1.5;
+}
+
+.gauge .merc {
+    fill: var(--accent);
+}
+
+.gauge .drop-fill {
+    fill: var(--humid);
+}
+
+.card.alert .gauge.temp .merc {
+    fill: var(--danger);
+}
+
+.gauge.empty .merc,
+.gauge.empty .drop-fill {
+    fill: var(--line);
+}

@@ -5,20 +5,28 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Smart Store admin</title>
 <link rel="stylesheet" href="{{ url_for('customer_bp.static', filename='style.css') }}">
+<script src="{{ url_for('customer_bp.static', filename='charts.js') }}"></script>
+<script src="{{ url_for('customer_bp.static', filename='html2pdf.bundle.min.js') }}"></script>
 </head>
 <body>
 
 <header class="top">
   <span class="brand">Smart Store · Product management</span>
-  <div class="who"><span>Admin</span><button class="btn alt sm" id="logoutBtn">Log out</button></div>
+  <div class="who">
+    <button class="btn alt sm" id="sensorsBtn" title="Fridge temperatures and the fan">Store sensors</button>
+    <span>Admin</span><button class="btn alt sm" id="logoutBtn">Log out</button>
+  </div>
 </header>
 
 <main class="wrap">
+  <div class="printhead" aria-hidden="true"><b>Smart Store</b> · <span id="phTitle"></span><br><span id="phRange"></span> · Generated <span id="phTime"></span></div>
 
   <div class="tabs" role="tablist">
     <button role="tab" aria-selected="true" data-tab="products">Products</button>
     <button role="tab" aria-selected="false" data-tab="receive">Receive stock</button>
     <button role="tab" aria-selected="false" data-tab="inventory">Inventory</button>
+    <button role="tab" aria-selected="false" data-tab="sales">Sales report</button>
+    <button role="tab" aria-selected="false" data-tab="customers">Customer report</button>
   </div>
 
   <!-- PRODUCTS: register, edit, delete -->
@@ -68,13 +76,19 @@
     <div class="stats">
       <div class="panel"><strong id="sTypes">0</strong><span class="muted">Product types</span></div>
       <div class="panel"><strong id="sUnits">0</strong><span class="muted">Units in stock</span></div>
+      <div class="panel"><strong id="sMid">0</strong><span class="muted" id="sMidLabel">Moderate</span></div>
       <div class="panel"><strong id="sLow">0</strong><span class="muted" id="sLowLabel">Running low</span></div>
     </div>
     <div class="panel">
-      <h2>Stock by product</h2>
+      <div class="row">
+        <h2>Stock by product</h2>
+        <span class="muted live"><span class="pulse" aria-hidden="true"></span>Live · updated <span id="invTime">now</span>
+          <button type="button" class="btn alt sm" data-print>Save as PDF</button></span>
+      </div>
+      <p class="legend"><span class="lvl ok">OK</span> more than <span id="lgMid">10</span> · <span class="lvl moderate">Moderate</span> <span id="lgLow1">4</span>–<span id="lgMid2">10</span> · <span class="lvl low">Low</span> <span id="lgLow">3</span> or fewer</p>
       <div class="scroll">
         <table>
-          <thead><tr><th>Product</th><th>UPC</th><th>In stock</th><th>Last received</th></tr></thead>
+          <thead><tr><th>Product</th><th>Category</th><th>UPC</th><th>In stock</th><th>Level</th><th>Last received</th></tr></thead>
           <tbody id="invRows"></tbody>
         </table>
       </div>
@@ -87,6 +101,81 @@
           <tbody id="recRows"></tbody>
         </table>
       </div>
+    </div>
+  </section>
+
+  <!-- SALES REPORT -->
+  <section id="sales" class="stack" hidden>
+    <div class="panel">
+      <form class="range" id="slForm">
+        <label>From<input type="date" id="slStart" required></label>
+        <label>To<input type="date" id="slEnd" required></label>
+        <div class="presets">
+          <button type="button" class="btn alt sm" data-preset="today">Today</button>
+          <button type="button" class="btn alt sm" data-preset="week">Last 7 days</button>
+          <button type="button" class="btn alt sm" data-preset="month">Last 30 days</button>
+          <button type="button" class="btn alt sm" data-preset="thismonth">This month</button>
+        </div>
+        <button class="btn">Show</button>
+        <button type="button" class="btn alt" data-print>Save as PDF</button>
+      </form>
+      <p class="muted" id="slCaption"></p>
+    </div>
+    <div class="stats">
+      <div class="panel"><strong id="slRevenue">$0.00</strong><span class="muted">Total sales (taxes included)</span></div>
+      <div class="panel"><strong id="slSub">$0.00</strong><span class="muted">Before tax</span></div>
+      <div class="panel"><strong id="slReceipts">0</strong><span class="muted">Receipts</span></div>
+      <div class="panel"><strong id="slUnits">0</strong><span class="muted">Units sold</span></div>
+    </div>
+    <div class="cols2">
+      <div class="panel"><h2>Most sold</h2><p class="big" id="slMost">–</p><p class="muted" id="slMostN"></p></div>
+      <div class="panel"><h2>Least sold</h2><p class="big" id="slLeast">–</p><p class="muted" id="slLeastN"></p></div>
+    </div>
+    <div class="panel"><h2>Sales by day</h2><div id="slDayChart"></div>
+      <details><summary>Show the day-by-day table</summary>
+        <div class="scroll"><table><thead><tr><th>Date</th><th>Receipts</th><th>Units</th><th>Sales</th></tr></thead><tbody id="slDayRows"></tbody></table></div>
+      </details>
+    </div>
+    <div class="panel"><h2>Units sold per product</h2><div id="slProdChart"></div>
+      <div class="scroll"><table><thead><tr><th>Product</th><th>Category</th><th>UPC</th><th>Units sold</th><th>Sales before tax</th></tr></thead><tbody id="slProdRows"></tbody></table></div>
+      <p class="muted" id="slUnsold"></p>
+    </div>
+  </section>
+
+  <!-- CUSTOMER ACTIVITY REPORT -->
+  <section id="customers" class="stack" hidden>
+    <div class="panel">
+      <form class="range" id="cuForm">
+        <label>From<input type="date" id="cuStart" required></label>
+        <label>To<input type="date" id="cuEnd" required></label>
+        <div class="presets">
+          <button type="button" class="btn alt sm" data-preset="today">Today</button>
+          <button type="button" class="btn alt sm" data-preset="week">Last 7 days</button>
+          <button type="button" class="btn alt sm" data-preset="month">Last 30 days</button>
+          <button type="button" class="btn alt sm" data-preset="thismonth">This month</button>
+        </div>
+        <button class="btn">Show</button>
+        <button type="button" class="btn alt" data-print>Save as PDF</button>
+      </form>
+      <p class="muted" id="cuCaption"></p>
+    </div>
+    <div class="stats">
+      <div class="panel"><strong id="cuTotal">0</strong><span class="muted">Customers who bought</span></div>
+      <div class="panel"><strong id="cuNew">0</strong><span class="muted">New (first purchase in this period)</span></div>
+      <div class="panel"><strong id="cuRet">0</strong><span class="muted">Returning (had bought before)</span></div>
+    </div>
+    <div class="cols2">
+      <div class="panel"><h2>Busiest day</h2><p class="big" id="cuBusy">–</p><p class="muted" id="cuBusyN"></p></div>
+      <div class="panel"><h2>Quietest day</h2><p class="big" id="cuQuiet">–</p><p class="muted" id="cuQuietN"></p></div>
+    </div>
+    <div class="panel"><h2>New vs returning</h2><div id="cuSplit"></div></div>
+    <div class="panel"><h2>Customers per day</h2><div id="cuDayChart"></div>
+      <details><summary>Show the day-by-day table</summary>
+        <div class="scroll"><table><thead><tr><th>Date</th><th>Customers</th><th>Receipts</th></tr></thead><tbody id="cuDayRows"></tbody></table></div>
+      </details>
+    </div>
+    <div class="panel"><h2>Top customers</h2>
+      <div class="scroll"><table><thead><tr><th>Customer</th><th>Membership number</th><th>Visits</th><th>Spent</th></tr></thead><tbody id="cuTopRows"></tbody></table></div>
     </div>
   </section>
 
@@ -136,9 +225,12 @@ let token = location.hash.slice(1);
 history.replaceState(null, '', location.pathname);
 if(!token) location.replace('/');
 
+let current = 'products', salesLoaded = false, custLoaded = false;
 let products = [], tags = [], selected = null, editUpc = null, deleteUpc = null, idleTimer = null;
 
 function leave(){ token = ''; location.replace('/') }
+// the fridge dashboard is admin-only: it gets the token the same way this page did
+$('#sensorsBtn').onclick = () => { location.href = {{ url_for('customer_bp.temperature')|tojson }} + '#' + token };
 function resetIdle(){ clearTimeout(idleTimer); idleTimer = setTimeout(leave, IDLE_MS) }
 ['pointerdown','keydown'].forEach(ev => addEventListener(ev, resetIdle)); resetIdle();
 $('#logoutBtn').onclick = leave;
@@ -160,8 +252,11 @@ document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>b.closest('di
 /* ---------- tabs ---------- */
 document.querySelectorAll('[data-tab]').forEach(tab=>tab.onclick=()=>{
   document.querySelectorAll('[data-tab]').forEach(t=>t.setAttribute('aria-selected',t===tab));
-  ['products','receive','inventory'].forEach(id=>document.getElementById(id).hidden=(id!==tab.dataset.tab));
-  if(tab.dataset.tab === 'inventory') loadInventory();
+  ['products','receive','inventory','sales','customers'].forEach(id=>document.getElementById(id).hidden=(id!==tab.dataset.tab));
+  current = tab.dataset.tab;
+  if(current === 'inventory') loadInventory();
+  if(current === 'sales' && !salesLoaded) loadSales();
+  if(current === 'customers' && !custLoaded) loadCustomers();
 });
 
 /* ---------- products ---------- */
@@ -324,17 +419,24 @@ $('#receiveForm').onsubmit = async e => {
   products = r.products; renderProducts(); showFound(); loadInventory();
 };
 
-/* ---------- inventory ---------- */
+/* ---------- inventory (refreshes itself every 5 seconds while open, so sales show up live) ---------- */
+const LEVEL_TEXT = {ok: 'OK', moderate: 'Moderate', low: 'Low'};
 async function loadInventory(){
   const r = await api('/admin/api/inventory'); if(!r.ok) return toast(r.error, true);
-  $('#sTypes').textContent = r.stats.types; $('#sUnits').textContent = r.stats.units; $('#sLow').textContent = r.stats.low;
-  $('#sLow').className = r.stats.low ? 'low' : '';
+  $('#sTypes').textContent = r.stats.types; $('#sUnits').textContent = r.stats.units;
+  $('#sLow').textContent = r.stats.low; $('#sMid').textContent = r.stats.moderate;
+  $('#sLow').className = r.stats.low ? 'low' : ''; $('#sMid').className = r.stats.moderate ? 'mid' : '';
   $('#sLowLabel').textContent = `Running low (${r.stats.low_limit} or fewer)`;
+  $('#sMidLabel').textContent = `Moderate (${r.stats.low_limit + 1} to ${r.stats.moderate_limit})`;
+  $('#lgLow').textContent = r.stats.low_limit; $('#lgLow1').textContent = r.stats.low_limit + 1;
+  $('#lgMid').textContent = $('#lgMid2').textContent = r.stats.moderate_limit;
+  $('#invTime').textContent = new Date().toLocaleTimeString();
   const inv = $('#invRows'); inv.replaceChildren();
-  if(!r.rows.length) inv.append(emptyRow(4, 'No products yet.'));
+  if(!r.rows.length) inv.append(emptyRow(6, 'No products yet.'));
   r.rows.forEach(x => {
-    const tr = el('tr'), low = x.in_stock <= r.stats.low_limit;
-    tr.append(cell(x.name), cell(x.upc), cell(String(x.in_stock), low ? 'low' : ''),
+    const tr = el('tr', undefined, 'row-' + x.level);
+    tr.append(cell(x.name), cell(x.category), cell(x.upc), cell(String(x.in_stock), 'num'),
+              cell(el('span', LEVEL_TEXT[x.level], 'lvl ' + x.level)),
               cell(x.last_received ? `${x.last_received.date} · ${x.last_received.quantity} units` : 'No reception recorded'));
     inv.append(tr);
   });
@@ -342,6 +444,108 @@ async function loadInventory(){
   if(!r.receptions.length) rec.append(emptyRow(4, 'No stock received yet. Use Receive stock to record a delivery.'));
   r.receptions.forEach(x => { const tr = el('tr'); tr.append(cell(x.date), cell(x.name), cell(x.upc), cell(String(x.quantity))); rec.append(tr) });
 }
+setInterval(() => { if(current === 'inventory' && !document.hidden) loadInventory() }, 5000);
+
+/* ---------- reports: shared date range ---------- */
+const money = v => '$' + Number(v).toFixed(2);
+const nice = d => new Date(d + 'T12:00').toLocaleDateString(undefined, {weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'});
+const shortDay = d => new Date(d + 'T12:00').toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
+function setupRange(p, load){
+  const [a, b] = presetRange('month'); $(`#${p}Start`).value = a; $(`#${p}End`).value = b;
+  $(`#${p}Form`).onsubmit = e => { e.preventDefault(); load() };
+  $(`#${p}Form`).querySelectorAll('[data-preset]').forEach(btn => btn.onclick = () => {
+    const [s, t] = presetRange(btn.dataset.preset); $(`#${p}Start`).value = s; $(`#${p}End`).value = t; load();
+  });
+}
+const rangeQuery = p => `start=${$(`#${p}Start`).value}&end=${$(`#${p}End`).value}`;
+const rangeText = r => r.start === r.end ? nice(r.start) : `${nice(r.start)} to ${nice(r.end)}`;
+const names = list => list.length > 3 ? list.slice(0, 3).join(', ') + ` and ${list.length - 3} more` : list.join(', ');
+
+/* ---------- sales report ---------- */
+async function loadSales(){
+  const r = await api('/admin/api/reports/sales?' + rangeQuery('sl')); if(!r.ok) return toast(r.error, true);
+  salesLoaded = true;
+  $('#slCaption').textContent = 'Showing ' + rangeText(r) + '.';
+  $('#slRevenue').textContent = money(r.totals.revenue); $('#slSub').textContent = money(r.totals.subtotal);
+  $('#slReceipts').textContent = r.totals.receipts; $('#slUnits').textContent = r.totals.units;
+  const none = !r.products.length;
+  $('#slMost').textContent = none ? 'No sales' : names(r.most_sold.names);
+  $('#slMostN').textContent = none ? '' : `${r.most_sold.units} unit${r.most_sold.units === 1 ? '' : 's'} sold` + (r.most_sold.names.length > 1 ? ' each' : '');
+  $('#slLeast').textContent = none ? 'No sales' : names(r.least_sold.names);
+  $('#slLeastN').textContent = none ? '' : `${r.least_sold.units} unit${r.least_sold.units === 1 ? '' : 's'} sold` + (r.least_sold.names.length > 1 ? ' each' : '');
+  lineChart($('#slDayChart'), r.days.map(d => ({label: nice(d.date), short: shortDay(d.date), value: d.revenue})), {money: true, keepZeros: true, title: 'Sales per day'});
+  const dr = $('#slDayRows'); dr.replaceChildren();
+  r.days.slice().reverse().forEach(d => { const tr = el('tr'); tr.append(cell(d.date), cell(String(d.receipts)), cell(String(d.units)), cell(money(d.revenue))); dr.append(tr) });
+  barChart($('#slProdChart'), r.products.map((p, i) => ({label: p.name, value: p.sold,
+    cls: p.sold === r.most_sold.units ? 'best' : p.sold === r.least_sold.units ? 'worst' : ''})), {empty: 'Nothing was sold in this period.', title: 'Units sold per product'});
+  const pr = $('#slProdRows'); pr.replaceChildren();
+  if(none) pr.append(emptyRow(5, 'Nothing was sold in this period.'));
+  r.products.forEach(p => { const tr = el('tr'); tr.append(cell(p.name), cell(p.category), cell(p.upc), cell(String(p.sold)), cell(money(p.revenue))); pr.append(tr) });
+  $('#slUnsold').textContent = r.unsold.length ? `Not sold at all in this period: ${r.unsold.join(', ')}.` : '';
+}
+setupRange('sl', loadSales);
+
+/* ---------- customer activity report ---------- */
+async function loadCustomers(){
+  const r = await api('/admin/api/reports/customers?' + rangeQuery('cu')); if(!r.ok) return toast(r.error, true);
+  custLoaded = true;
+  $('#cuCaption').textContent = 'Showing ' + rangeText(r) + '.';
+  $('#cuTotal').textContent = r.totals.customers; $('#cuNew').textContent = r.totals.new; $('#cuRet').textContent = r.totals.returning;
+  const day = (b, n) => !b.customers && !r.totals.customers ? ['No purchases', ''] :
+    [b.dates.length > 2 ? `${b.dates.length} days tied` : b.dates.map(nice).join(' and '),
+     `${b.customers} customer${b.customers === 1 ? '' : 's'}` + (b.dates.length > 2 ? ` each (${b.dates.slice(0, 3).map(shortDay).join(', ')}…)` : '')];
+  [$('#cuBusy').textContent, $('#cuBusyN').textContent] = day(r.busiest);
+  [$('#cuQuiet').textContent, $('#cuQuietN').textContent] = day(r.quietest);
+  barChart($('#cuSplit'), r.totals.customers ? [{label: 'New', value: r.totals.new, cls: 'best'}, {label: 'Returning', value: r.totals.returning}] : [],
+           {empty: 'No member bought anything in this period.'});
+  lineChart($('#cuDayChart'), r.days.map(d => ({label: nice(d.date), short: shortDay(d.date), value: d.customers})), {keepZeros: true, title: 'Customers per day'});
+  const dr = $('#cuDayRows'); dr.replaceChildren();
+  r.days.slice().reverse().forEach(d => { const tr = el('tr'); tr.append(cell(d.date), cell(String(d.customers)), cell(String(d.receipts))); dr.append(tr) });
+  const tr0 = $('#cuTopRows'); tr0.replaceChildren();
+  if(!r.top_customers.length) tr0.append(emptyRow(4, 'No member bought anything in this period.'));
+  r.top_customers.forEach(c => { const tr = el('tr'); tr.append(cell(c.name), cell(c.card_number || ''), cell(String(c.visits)), cell(money(c.spent))); tr0.append(tr) });
+}
+setupRange('cu', loadCustomers);
+
+/* ---------- Save as PDF: builds the file in the page and downloads it straight away ---------- */
+const REPORT_TITLES = {inventory: 'Inventory report', sales: 'Sales report', customers: 'Customer activity report'};
+function reportFileName(){
+  const pre = current === 'sales' ? 'sl' : current === 'customers' ? 'cu' : null;
+  const a = pre && $(`#${pre}Start`).value, b = pre && $(`#${pre}End`).value;
+  const span = !pre ? isoDay(new Date()) : a === b ? a : `${a} to ${b}`;
+  return `${REPORT_TITLES[current] || 'Report'} ${span}.pdf`;      // e.g. "Sales report 2026-11-01 to 2026-11-05.pdf"
+}
+document.querySelectorAll('[data-print]').forEach(btn => btn.onclick = async () => {
+  $('#phTitle').textContent = REPORT_TITLES[current] || 'Report';
+  $('#phRange').textContent = current === 'sales' ? $('#slCaption').textContent : current === 'customers' ? $('#cuCaption').textContent : 'Stock on hand';
+  $('#phTime').textContent = new Date().toLocaleString();
+  if(typeof html2pdf === 'undefined'){ window.print(); return }      // library missing: fall back to the print window
+  const closed = [...document.querySelectorAll('details:not([open])')];
+  closed.forEach(d => d.open = true);                                  // include the day-by-day tables
+  document.body.classList.add('pdf-mode');
+  const charts = [...document.querySelectorAll('main section:not([hidden]) svg.chart')];
+  charts.forEach(svg => {                       // the PDF tool needs charts with a fixed pixel size
+    const r = svg.getBoundingClientRect(); svg.setAttribute('width', Math.round(r.width)); svg.setAttribute('height', Math.round(r.height));
+  });
+  document.querySelectorAll('[data-print]').forEach(b => b.disabled = true);
+  toast('Making the PDF…');
+  try{
+    await html2pdf().set({
+      margin: [10, 10, 12, 10], filename: reportFileName(),
+      image: {type: 'jpeg', quality: 0.95},
+      html2canvas: {scale: 2, useCORS: true, backgroundColor: '#ffffff'},
+      jsPDF: {unit: 'mm', format: 'letter', orientation: 'portrait'},
+      pagebreak: {mode: ['css', 'legacy'], avoid: ['.panel', 'tr']}
+    }).from(document.querySelector('main')).save();
+    toast('PDF saved: ' + reportFileName());
+  }catch(e){ toast('Could not make the PDF. Try again.', true) }
+  finally{
+    document.body.classList.remove('pdf-mode');
+    charts.forEach(svg => { svg.removeAttribute('width'); svg.removeAttribute('height') });
+    closed.forEach(d => d.open = false);
+    document.querySelectorAll('[data-print]').forEach(b => b.disabled = false);
+  }
+});
 
 drawTags(); loadProducts(); loadInventory();
 </script>
