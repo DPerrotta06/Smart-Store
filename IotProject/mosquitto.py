@@ -143,6 +143,9 @@ client.on_message = on_message
  
  
 def start():
-    client.connect("localhost", 1883)
-    client.loop_start()
+    try:
+        client.connect("localhost", 1883)
+        client.loop_start()
+    except ConnectionRefusedError:
+        print("WARNING: MQTT Broker not found on localhost. Skipping MQTT for PC development.")
 
