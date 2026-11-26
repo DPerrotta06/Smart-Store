@@ -4,12 +4,21 @@ import time
 import threading
 from flask import Flask, render_template, request, jsonify
 import paho.mqtt.client as mqtt
-import threading
-import socketio # a 2 way asynchronous event based-communication
+import socketio
 
-app = Flask(__name__)
-THRESHOLD_FILE = "thresholds.json"
+app = Flask(
+    __name__,
+    template_folder=os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "View", "html")
+    ),
+)
+THRESHOLD_FILE = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "thresholds.json")
+)
 socket = socketio.Client()
+PATREO_SOCKET_URL = os.getenv("PATREO_SOCKET_URL", "http://localhost:3001")
+MQTT_HOST = os.getenv("MQTT_HOST", "localhost")
+BLE_ID = os.getenv("BLE_ID", "").strip().lower()
 
 # Stores the latest live readings in memory for the gauges
 sensor_data = {
@@ -19,10 +28,11 @@ sensor_data = {
 ble_data = {
     "BLE": 
         {
-            "temperature": None, "humidity": None, "illuminance": None, "motion": False, "last_motion": None, "battery": None, "last_seen": None
+            "device_id": None, "temperature": None, "humidity": None,
+            "illuminance": None, "motion": None, "last_motion": None,
+            "battery": None, "last_seen": None
         }
 }
-BLE_ID = "" #PUT BLE SENSOR MAC ADDRESS HERE!!!
 
 # --- JSON File Helper Functions ---
 def read_thresholds():
@@ -38,7 +48,7 @@ def write_thresholds(data):
         json.dump(data, f, indent=4)
 
 # --- MQTT Setup ---
-def on_connect(client, userdata, flags, rc):
+def on_connect(client, userdata, flags, reason_code, properties):
     client.subscribe("Frig1")
     client.subscribe("Frig2")
 
@@ -54,7 +64,7 @@ def on_message(client, userdata, msg):
 def start_patreo():
     while True:
         try:
-            socket.connect('http://localhost:3001')
+            socket.connect(PATREO_SOCKET_URL)
             socket.wait()
         except Exception as e:
             print("Connection failed: ", e)
@@ -62,9 +72,12 @@ def start_patreo():
 
 @socket.on('dynamb')
 def on_dynamb(data):
-    if str(data.get("deviceId", "")).lower() != BLE_ID:
+    device_id = str(data.get("deviceId", "")).strip()
+    if BLE_ID and device_id.lower() != BLE_ID:
         return
     ble = ble_data["BLE"]
+    if device_id:
+        ble["device_id"] = device_id
     if "temperature" in data:
         ble["temperature"] = data["temperature"]
     if "relativeHumidity" in data:
@@ -73,25 +86,30 @@ def on_dynamb(data):
         ble["illuminance"] = data["illuminance"]
     if "batteryPercentage" in data:
         ble["battery"] = data["batteryPercentage"]
-    if "isMotionDetectd" in data:
-        motion = data["isMotionDetectd"]
-        ble["motion"] = bool(motion[0] if isinstance(motion, list) else motion)
+    motion = data.get(
+        "isMotionDetected", data.get("isMotionDetectd", data.get("motion"))
+    )
+    if motion is not None:
+        if isinstance(motion, list):
+            motion = motion[0] if motion else False
+        if isinstance(motion, str):
+            motion = motion.strip().lower() in {"true", "1", "yes"}
+        ble["motion"] = bool(motion)
         if ble["motion"]:
             ble["last_motion"] = time.time()
-        ble["last_seen"] = time.time()
+    ble["last_seen"] = time.time()
 
-mqtt_client = mqtt.Client()
+mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 mqtt_client.on_connect = on_connect
 mqtt_client.on_message = on_message
-mqtt_client.connect("10.0.0.148", 1883, 60)
+mqtt_client.connect_async(MQTT_HOST, 1883, 60)
 mqtt_client.loop_start()
 
 # --- Flask Routes ---
 @app.route("/")
 def index():
     thresholds = read_thresholds()
-    # Renders HTML with initial threshold values via Jinja
-    return render_template("index.html", thresholds=thresholds)
+    return render_template("dhtDashboard.html", thresholds=thresholds)
 
 @app.route("/api/sensors", methods=["GET"])
 def get_sensors():
@@ -113,7 +131,7 @@ def update_thresholds():
 @app.route("/api/ble", methods=["GET"])
 def get_ble_data():
     ble = ble_data["BLE"]
-    isOnline = ble["last_seen"] is not None and time.time() - bl["last_seen"] < 30
+    isOnline = ble["last_seen"] is not None and time.time() - ble["last_seen"] < 30
     return jsonify({"BLE": {**ble, 'online':isOnline}})
 
 

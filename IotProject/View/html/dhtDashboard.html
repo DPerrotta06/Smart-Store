@@ -173,7 +173,7 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.5l11 11L12 23V1l5.5 5.5-11 11"/></svg>
                 </span>
                 <div><h3>BLE Sensor</h3><small>Room conditions</small></div>
-                <span class="ble-state" id="ble-state">Not connected</span>
+                <span class="ble-state" id="patreo-state">Waiting for Patreo</span>
             </div>
 
             <div class="gauges ble-gauges">
@@ -216,8 +216,12 @@
                 <div class="device-actions">
                     <button type="button" id="ble-connect">Connect sensor</button>
                     <button type="button" id="ble-disconnect" class="ghost" hidden>Disconnect</button>
+                    <span class="ble-state" id="browser-ble-state">Not connected</span>
                 </div>
                 <dl class="info">
+                    <dt>Patreo device ID</dt><dd id="patreo-id">--</dd>
+                    <dt>Patreo battery</dt><dd id="patreo-battery">--</dd>
+                    <dt>Patreo last seen</dt><dd id="patreo-last-seen">--</dd>
                     <dt>Name</dt><dd id="info-name">--</dd>
                     <dt>Serial number</dt><dd id="info-serial">--</dd>
                     <dt>Manufacturer</dt><dd id="info-manufacturer">--</dd>
@@ -313,6 +317,39 @@
             });
     }, 2000);
 
+    const patreoState = document.getElementById('patreo-state');
+    function refreshPatreoData() {
+        fetch('/api/ble')
+            .then(res => {
+                if (!res.ok) throw new Error(`BLE request failed (${res.status})`);
+                return res.json();
+            })
+            .then(data => {
+                const ble = data.BLE;
+                updateBle({
+                    temperature: ble.temperature,
+                    humidity: ble.humidity,
+                    light: ble.illuminance,
+                    motion: ble.motion
+                });
+                patreoState.textContent = ble.online ? 'Patreo online' : 'Waiting for Patreo';
+                patreoState.classList.toggle('on', ble.online);
+                document.getElementById('patreo-id').textContent = ble.device_id || '--';
+                document.getElementById('patreo-battery').textContent =
+                    ble.battery == null ? '--' : `${ble.battery} %`;
+                document.getElementById('patreo-last-seen').textContent =
+                    ble.last_seen == null ? '--' : new Date(ble.last_seen * 1000).toLocaleTimeString();
+            })
+            .catch(error => {
+                patreoState.textContent = 'BLE API unavailable';
+                patreoState.classList.remove('on');
+                console.error('Could not load Patreo BLE data:', error);
+            });
+    }
+
+    refreshPatreoData();
+    setInterval(refreshPatreoData, 2000);
+
 
     function saveThresholds() {
         const t1 = document.getElementById('thresh1').value;
@@ -335,7 +372,7 @@
     const bleBtn = document.getElementById('ble-connect');
     const bleOff = document.getElementById('ble-disconnect');
     const bleMsg = document.getElementById('ble-msg');
-    const bleState = document.getElementById('ble-state');
+    const bleState = document.getElementById('browser-ble-state');
     const INFO_FIELDS = [
         ['serial_number_string',     'info-serial'],
         ['manufacturer_name_string', 'info-manufacturer'],
