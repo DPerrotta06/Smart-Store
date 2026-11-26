@@ -1,12 +1,16 @@
+import csv
+import io
 import re
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
-from flask import Blueprint, jsonify, render_template, request, current_app
+from flask import Blueprint, Response, jsonify, render_template, request, current_app
 from sqlalchemy import case, func, or_
 
 from Database.db import db
 from Model.checkoutModels import Product, StockReception, CartItem  # swap to the merged models later
+from Model.receiptModel import Receipt
+from Model.customerModel import Customer
 from Hardware import rfid_reader
 from GeneralFunction.adminAuth import requireAdmin
 
@@ -239,3 +243,61 @@ def inventory():
         stats={"types": len(types), "units": sum(t["in_stock"] for t in types),
                "low": sum(1 for t in types if t["in_stock"] <= LOW_STOCK), "low_limit": LOW_STOCK},
         rows=rows, receptions=receptions)
+
+
+@admin_bp.route("/api/export/orders", methods=["GET"])
+def export_orders_csv():
+    receipts = Receipt.query.order_by(Receipt.receipt_id.desc()).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow([
+        "Receipt ID",
+        "Purchased At",
+        "Membership Number",
+        "Customer Name",
+        "Email",
+        "Items",
+        "Points Earned",
+        "Total ($)"
+    ])
+
+    for receipt in receipts:
+        customer = None
+        if receipt.membership_number:
+            customer = Customer.query.filter_by(
+                membership_number=receipt.membership_number
+            ).first()
+
+        customer_name = f"{customer.first_name} {customer.last_name}" if customer else "Guest"
+        customer_email = customer.email if customer and customer.email else ""
+
+        items = CartItem.query.filter_by(receipt_id=receipt.receipt_id).all()
+        item_parts = []
+        for item in items:
+            product = getattr(item, "product", None) or Product.query.get(item.product_id)
+            name = product.name if product else f"Product #{item.product_id}"
+            qty = getattr(item, "item_quantity", getattr(item, "quantity", 1))
+            price = getattr(item, "unit_price", product.price if product else 0)
+            item_parts.append(f"{name} (x{qty} @ ${float(price):.2f})")
+
+        writer.writerow([
+            receipt.receipt_id,
+            receipt.purchased_at,
+            receipt.membership_number or "Guest",
+            customer_name,
+            customer_email,
+            "; ".join(item_parts),
+            f"{float(receipt.points_earned):.2f}",
+            f"{float(receipt.total):.2f}"
+        ])
+
+    csv_data = output.getvalue()
+    output.close()
+
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=orders_export.csv"}
+    )
