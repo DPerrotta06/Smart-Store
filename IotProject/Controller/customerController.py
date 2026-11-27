@@ -18,6 +18,8 @@ import bcrypt
 # and a reload, a log out or the idle timeout clears it.
 
 customer_bp = Blueprint('customer_bp', __name__, template_folder='../View/html', static_folder='../View/css')
+# JavaScript files live in View/js and are served at /js/<file>
+js_bp = Blueprint('js_bp', __name__, static_folder='../View/js', static_url_path='/js')
 
 PATTERN_NAME = r"^[A-Z][a-z]+$"
 PATTERN_PASSWORD = r"(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{8,30}"

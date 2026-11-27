@@ -36,10 +36,81 @@
         <section id="banner" class="banner" role="alert" hidden></section>
 
         <div class="fridges" id="fridges"></div>
+
+        <!-- Phase 4: BLE room sensor (Minew MSP01): temperature, humidity, light and movement -->
+        <section class="card ble-card" id="ble-card">
+            <header class="card-head">
+                <div class="title">
+                    <svg class="fridge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.5l11 11L12 23V1l5.5 5.5-11 11"/></svg>
+                    <h2>Room sensor <small class="sub">BLE · Minew MSP01</small></h2>
+                </div>
+                <span class="status waiting" id="pareto-state">Waiting for Pareto Anywhere</span>
+            </header>
+
+            <div class="ble-layout">
+                <div class="gauges" id="ble-gauges"></div>
+
+                <div class="ble-grid">
+                    <div class="tile light">
+                        <div class="tile-head">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+                            Light level
+                        </div>
+                        <div class="tile-value"><span id="light-value">--</span><small>lux</small></div>
+                        <div class="bar"><span id="light-bar" style="width:0"></span></div>
+                        <p class="tile-note" id="light-label">No data</p>
+                    </div>
+
+                    <div class="tile motion" id="motion-tile">
+                        <div class="tile-head">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="2"/><path d="M8 8a5.7 5.7 0 0 0 0 8M16 8a5.7 5.7 0 0 1 0 8M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14"/></svg>
+                            Movement
+                        </div>
+                        <div class="motion-row">
+                            <span class="motion-dot"></span>
+                            <span class="motion-text" id="motion-text">--</span>
+                        </div>
+                        <p class="tile-note" id="motion-note">No data</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="device">
+                <div class="device-head">
+                    <h3 id="device-title">Device information</h3>
+                    <button type="button" class="device-toggle" id="device-toggle" aria-expanded="false" aria-controls="device-body" aria-label="Show device information">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                    </button>
+                </div>
+                <div id="device-body" hidden>
+                    <div class="device-actions">
+                        <button type="button" id="ble-connect">Connect sensor</button>
+                        <button type="button" id="ble-disconnect" class="secondary" hidden>Disconnect</button>
+                        <span class="status" id="browser-ble-state">Not connected</span>
+                    </div>
+                    <dl class="info">
+                        <dt>Pareto device ID</dt><dd id="pareto-id">--</dd>
+                        <dt>Pareto battery</dt><dd id="pareto-battery">--</dd>
+                        <dt>Pareto last seen</dt><dd id="pareto-last-seen">--</dd>
+                        <dt>Name</dt><dd id="info-name">--</dd>
+                        <dt>Serial number</dt><dd id="info-serial">--</dd>
+                        <dt>Manufacturer</dt><dd id="info-manufacturer">--</dd>
+                        <dt>Model</dt><dd id="info-model">--</dd>
+                        <dt>Hardware revision</dt><dd id="info-hardware">--</dd>
+                        <dt>Firmware revision</dt><dd id="info-firmware">--</dd>
+                        <dt>Software revision</dt><dd id="info-software">--</dd>
+                        <dt>Battery</dt><dd id="info-battery">--</dd>
+                        <dt>Device ID</dt><dd id="info-id">--</dd>
+                    </dl>
+                    <p class="device-msg" id="ble-msg" role="status"></p>
+                </div>
+            </div>
+        </section>
     </main>
 
     <script>
         const DATA_URL = "{{ url_for('customer_bp.get_sensors') }}";
+        const BLE_URL = "{{ url_for('ble_bp.get_ble_data') }}";
         const THRESHOLD_URL = "{{ url_for('customer_bp.update_thresholds') }}";
         const FAN_STATUS_URL = "{{ url_for('fan_bp.fan_status') }}";
         const FAN_ON_URL = "{{ url_for('fan_bp.fan_on') }}";
@@ -164,6 +235,186 @@
                 form.addEventListener("submit", saveLimit);
             });
         }
+
+        // ---------- Phase 4: BLE room sensor ----------
+        function renderBleGauges() {
+            document.getElementById("ble-gauges").innerHTML =
+                gauge("ble-temp", "Temperature (°C)", "temp", TEMP_MAX) +
+                gauge("ble-hum", "Humidity (%)", "humidity", HUM_MAX);
+        }
+
+        const LUX_MAX = 10000;
+
+        function lightLabel(lux) {
+            if (lux < 10) return "Dark";
+            if (lux < 100) return "Dim";
+            if (lux < 500) return "Indoor lighting";
+            if (lux < 5000) return "Bright";
+            return "Daylight";
+        }
+
+        function updateBle(d) {
+            setGauge("ble-temp", typeof d.temperature === "number" ? d.temperature : null, TEMP_MAX);
+            setGauge("ble-hum", typeof d.humidity === "number" ? d.humidity : null, HUM_MAX);
+
+            if (typeof d.light === "number") {
+                const fraction = Math.min(Math.log10(Math.max(d.light, 1)) / Math.log10(LUX_MAX), 1);
+                document.getElementById("light-value").textContent = Math.round(d.light).toLocaleString();
+                document.getElementById("light-bar").style.width = (fraction * 100) + "%";
+                document.getElementById("light-label").textContent = lightLabel(d.light);
+            }
+
+            if (d.motion !== undefined && d.motion !== null) {
+                const moving = Boolean(d.motion);
+                document.getElementById("motion-tile").classList.toggle("active", moving);
+                document.getElementById("motion-text").textContent = moving ? "Motion detected" : "No motion";
+                document.getElementById("motion-note").textContent = d.lastMotion
+                    ? "Last movement at " + new Date(d.lastMotion * 1000).toLocaleTimeString()
+                    : "No movement seen yet";
+            }
+        }
+
+        const paretoState = document.getElementById("pareto-state");
+        function setParetoState(text, kind) {
+            paretoState.textContent = text;
+            paretoState.className = "status " + kind;
+        }
+
+        async function refreshBle() {
+            let ble;
+            try {
+                const response = await adminFetch(BLE_URL);
+                if (!response.ok) throw new Error(`BLE request failed (${response.status})`);
+                ble = (await response.json()).BLE;
+            } catch (error) {
+                setParetoState("BLE data unavailable", "bad");
+                console.error("Could not load BLE data:", error);
+                return;
+            }
+            updateBle({
+                temperature: ble.temperature, humidity: ble.humidity,
+                light: ble.illuminance, motion: ble.motion, lastMotion: ble.last_motion
+            });
+            document.getElementById("ble-card").classList.toggle("live", ble.online);
+            if (ble.online) setParetoState("Online", "good");
+            else if (ble.last_seen) setParetoState("Offline · last seen " + new Date(ble.last_seen * 1000).toLocaleTimeString(), "waiting");
+            else if (ble.error && !ble.pareto_connected) setParetoState("Pareto Anywhere not reachable", "bad");
+            else setParetoState("Waiting for the sensor", "waiting");
+            paretoState.title = ble.error || "";
+            document.getElementById("pareto-id").textContent = ble.device_id || "--";
+            document.getElementById("pareto-battery").textContent = ble.battery == null ? "--" : `${Math.round(ble.battery)} %`;
+            document.getElementById("pareto-last-seen").textContent =
+                ble.last_seen == null ? "--" : new Date(ble.last_seen * 1000).toLocaleTimeString();
+        }
+
+        // BLE device information, read straight from the sensor with Web Bluetooth (Chrome/Edge only)
+        const bleBtn = document.getElementById("ble-connect");
+        const bleOff = document.getElementById("ble-disconnect");
+        const bleMsg = document.getElementById("ble-msg");
+        const bleState = document.getElementById("browser-ble-state");
+        const INFO_FIELDS = [
+            ["serial_number_string",     "info-serial"],
+            ["manufacturer_name_string", "info-manufacturer"],
+            ["model_number_string",      "info-model"],
+            ["hardware_revision_string", "info-hardware"],
+            ["firmware_revision_string", "info-firmware"],
+            ["software_revision_string", "info-software"]
+        ];
+        let bleDevice = null;
+
+        function setInfo(id, text) { document.getElementById(id).textContent = text; }
+
+        function showMsg(text, isError) {
+            bleMsg.textContent = text;
+            bleMsg.classList.toggle("err", !!isError);
+        }
+
+        function showConnected(on) {
+            bleState.textContent = on ? "Connected" : "Not connected";
+            bleState.className = "status" + (on ? " good" : "");
+            bleBtn.hidden = on;
+            bleOff.hidden = !on;
+        }
+
+        function clearInfo() {
+            ["info-name", "info-id", "info-battery", ...INFO_FIELDS.map(f => f[1])].forEach(id => setInfo(id, "--"));
+        }
+
+        async function readText(service, name) {
+            try {
+                const characteristic = await service.getCharacteristic(name);
+                const value = await characteristic.readValue();
+                return new TextDecoder().decode(value).replace(/\0/g, "").trim() || "--";
+            } catch (e) {
+                return "Not provided";
+            }
+        }
+
+        async function readDeviceInfo(server) {
+            try {
+                const dis = await server.getPrimaryService("device_information");
+                for (const [name, id] of INFO_FIELDS) setInfo(id, await readText(dis, name));
+            } catch (e) {
+                INFO_FIELDS.forEach(f => setInfo(f[1], "Not provided"));
+            }
+            try {
+                const battery = await server.getPrimaryService("battery_service");
+                const level = await (await battery.getCharacteristic("battery_level")).readValue();
+                setInfo("info-battery", level.getUint8(0) + " %");
+            } catch (e) {
+                setInfo("info-battery", "Not provided");
+            }
+        }
+
+        async function connectBle() {
+            if (!navigator.bluetooth) {
+                showMsg("Web Bluetooth is not available. Use Chrome or Edge, and open this page over https or localhost.", true);
+                return;
+            }
+            bleBtn.disabled = true;
+            showMsg("Choose your sensor in the browser prompt...");
+            try {
+                bleDevice = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true,
+                    optionalServices: ["device_information", "battery_service"]
+                });
+                bleDevice.addEventListener("gattserverdisconnected", onBleLost);
+                setInfo("info-name", bleDevice.name || "Unnamed device");
+                setInfo("info-id", bleDevice.id.slice(0, 12) + "...");
+                showMsg("Connecting...");
+                const server = await bleDevice.gatt.connect();
+                showConnected(true);
+                await readDeviceInfo(server);
+                showMsg("");
+            } catch (e) {
+                if (e.name === "NotFoundError") { showMsg("No device selected."); }
+                else { showMsg("Could not connect: " + e.message, true); }
+                showConnected(false);
+            } finally {
+                bleBtn.disabled = false;
+            }
+        }
+
+        function onBleLost() {
+            showConnected(false);
+            showMsg("The sensor disconnected.", true);
+        }
+
+        const toggleBtn = document.getElementById("device-toggle");
+        const deviceBody = document.getElementById("device-body");
+        toggleBtn.addEventListener("click", () => {
+            const open = deviceBody.hidden;
+            deviceBody.hidden = !open;
+            toggleBtn.setAttribute("aria-expanded", open);
+            toggleBtn.setAttribute("aria-label", open ? "Hide device information" : "Show device information");
+        });
+
+        bleBtn.addEventListener("click", connectBle);
+        bleOff.addEventListener("click", () => {
+            if (bleDevice && bleDevice.gatt.connected) bleDevice.gatt.disconnect();
+            clearInfo();
+            showMsg("");
+        });
 
         function setGauge(id, value, max) {
             const fill = document.getElementById(id + "-fill");
@@ -317,9 +568,11 @@
         }
 
         renderCards();
+        renderBleGauges();
         refresh();
         refreshFan();
-        setInterval(() => { refresh(); refreshFan(); }, 2000);
+        refreshBle();
+        setInterval(() => { refresh(); refreshFan(); refreshBle(); }, 2000);
     </script>
 </body>
 </html>

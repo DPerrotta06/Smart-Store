@@ -384,3 +384,259 @@ button.ghost:hover {
 .gauge.empty .drop-fill {
     fill: var(--line);
 }
+
+/* ---------- Phase 4: BLE room sensor (your teammate's layout, in the app's colours) ---------- */
+
+:root {
+    --light: #d9a100;
+    --light-soft: #fff6d6;
+}
+
+.ble-card {
+    margin-top: 24px;
+}
+
+.card-head h2 .sub {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0;
+}
+
+.ble-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 24px;
+    align-items: center;
+}
+
+.ble-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+@media (max-width: 760px) {
+    .ble-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+.tile {
+    padding: 16px;
+    border-radius: 12px;
+}
+
+.tile-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+
+.tile-head svg {
+    width: 18px;
+    height: 18px;
+    flex: none;
+}
+
+.tile-value {
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+}
+
+.tile-value small {
+    margin-left: 3px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0;
+}
+
+.tile-note {
+    margin: 6px 0 0;
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+.bar {
+    height: 8px;
+    margin-top: 12px;
+    background: rgba(22, 41, 42, 0.1);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.bar span {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+}
+
+.tile.light {
+    background: var(--light-soft);
+}
+
+.tile.light .tile-head {
+    color: #7a5a00;
+}
+
+.tile.light .bar span {
+    background: var(--light);
+}
+
+.tile.motion {
+    background: var(--bg);
+}
+
+.tile.motion .tile-head {
+    color: var(--muted);
+}
+
+.motion-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.motion-dot {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #b9c9c4;
+    flex: none;
+}
+
+.motion-text {
+    font-size: 1.2rem;
+    font-weight: 800;
+}
+
+.tile.motion.active {
+    background: var(--danger-soft);
+}
+
+.tile.motion.active .tile-head,
+.tile.motion.active .motion-text {
+    color: var(--danger);
+}
+
+.tile.motion.active .motion-dot {
+    background: var(--danger);
+}
+
+/* device information */
+
+.device {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+}
+
+.device-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.device-head h3 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+button.device-toggle {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    min-height: 0;
+    padding: 0;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+}
+
+button.device-toggle:hover {
+    color: var(--ink);
+    background: var(--bg);
+}
+
+.device-toggle svg {
+    width: 16px;
+    height: 16px;
+}
+
+.device-toggle[aria-expanded="true"] svg {
+    transform: rotate(180deg);
+}
+
+.device-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 14px 0 12px;
+}
+
+/* a light button on a white card (the .ghost style is for the dark header) */
+button.secondary {
+    color: var(--brand);
+    background: transparent;
+    box-shadow: inset 0 0 0 2px var(--brand);
+}
+
+button.secondary:hover {
+    background: var(--bg);
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.info {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 16px;
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.info dt {
+    color: var(--muted);
+}
+
+.info dd {
+    margin: 0;
+    font-weight: 600;
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
+.device-msg {
+    min-height: 18px;
+    margin: 10px 0 0;
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+.device-msg.err {
+    color: var(--danger);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .bar span {
+        transition: width 0.6s ease;
+    }
+
+    .device-toggle svg {
+        transition: transform 0.2s ease;
+    }
+}
